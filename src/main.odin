@@ -8,6 +8,7 @@ import "core:strings"
 MAX_PINS_PER_NODE :: 5
 
 Pin_Type :: enum {
+	Execution,
 	Integer,
 	String,
 }
@@ -24,20 +25,22 @@ Node_Definition :: struct {
 }
 
 NODE_DEFINITIONS := [Node_Type]Node_Definition {
+	.Begin = {name = "Begin", inputs = {}, outputs = {{"Exec", .Execution}}},
 	.Add = {
 		name = "Add",
 		inputs = {{"A", .Integer}, {"B", .Integer}},
 		outputs = {{"Out", .Integer}},
 	},
-	.Print = {name = "Print", inputs = {{"Number", .Integer}}},
+	.Print = {name = "Print", inputs = {{"Exec", .Execution}, {"Number", .Integer}}, outputs = {}},
 }
 
 Node_Type :: enum {
+	Begin,
 	Add,
 	Print,
 }
 
-Node :: struct {
+Base_Node :: struct {
 	handle:   Node_Handle,
 	type:     Node_Type,
 	position: k2.Vec2,
@@ -71,7 +74,7 @@ Pin_Handle :: struct {
 }
 
 Graph :: struct {
-	nodes: hm.Dynamic_Handle_Map(Node, Node_Handle),
+	nodes: hm.Dynamic_Handle_Map(Base_Node, Node_Handle),
 	links: hm.Dynamic_Handle_Map(Link, Link_Handle),
 }
 
@@ -90,7 +93,7 @@ main :: proc() {
 }
 
 add_node :: proc(graph: ^Graph, node_type: Node_Type, position: k2.Vec2) -> Node_Handle {
-	return hm.add(&graph.nodes, Node{type = node_type, position = position})
+	return hm.add(&graph.nodes, Base_Node{type = node_type, position = position})
 }
 
 add_link :: proc(graph: ^Graph, from, to: Pin_Handle) -> Link_Handle {
@@ -98,14 +101,16 @@ add_link :: proc(graph: ^Graph, from, to: Pin_Handle) -> Link_Handle {
 }
 
 create_test_graph :: proc(graph: ^Graph) {
-	add := add_node(graph, .Add, {100, 100})
-	print := add_node(graph, .Print, {400, 100})
+	begin := add_node(graph, .Begin, {100, 50})
+	add := add_node(graph, .Add, {200, 200})
+	print := add_node(graph, .Print, {500, 50})
 
 	add_node := hm.get(&graph.nodes, add)
 	add_node.inputs[0].data = 1
 	add_node.inputs[1].data = 2
 
-	add_link(graph, {add, 2}, {print, 0})
+	add_link(graph, {begin, 0}, {print, 0})
+	add_link(graph, {add, 2}, {print, 1})
 }
 
 print_graph :: proc(graph: ^Graph) {
@@ -127,7 +132,7 @@ print_graph :: proc(graph: ^Graph) {
 		}
 
 		for pin, i in definition.outputs {
-			fmt.printf("  Output [%d] %s (%v)\n", i, pin.name, pin.type)
+			fmt.printf("  Output [%d] %s (%v)\n", len(definition.inputs) + i, pin.name, pin.type)
 		}
 	}
 
@@ -156,45 +161,83 @@ print_graph :: proc(graph: ^Graph) {
 	}
 }
 
-execute_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^strings.Builder) -> bool {
+find_incoming_link :: proc(graph: ^Graph, pin_handle: Pin_Handle) -> (Link, bool) {
+	for it := hm.iterator_make(&graph.links); link, _ in hm.iterate(&it) {
+		if link.to == pin_handle {
+			return link^, true
+		}
+	}
+	return {}, false
+}
+
+evaluate_data_node :: proc(
+	graph: ^Graph,
+	node_handle: Node_Handle,
+	output_index: int,
+) -> Pin_Data {
 	node := hm.get(&graph.nodes, node_handle)
 	switch node.type {
 	case .Add:
-		if node.inputs[0].data == nil || node.inputs[1].data == nil {
-			return false
-		}
-		a := node.inputs[0].data.(int)
-		b := node.inputs[1].data.(int)
-		sum := a + b
+		a_val := evaluate_pin_value(graph, node_handle, 0)
+		b_val := evaluate_pin_value(graph, node_handle, 1)
 
-		for it2 := hm.iterator_make(&graph.links); link, link_handle in hm.iterate(&it2) {
-			if link.from.node == node_handle && link.from.index == 2 {
-				to_node := hm.get(&graph.nodes, link.to.node)
-				to_node.inputs[link.to.index].data = sum
-				execute_node(graph, link.to.node, builder)
-			}
+		a, a_ok := a_val.(int)
+		b, b_ok := b_val.(int)
+		if a_ok && b_ok {
+			return a + b
 		}
-		return true
-	case .Print:
-		if value, exists := node.inputs[0].data.(int); exists {
-			fmt.sbprintf(builder, "%d\n", value)
-			return true
-		}
+	case .Begin, .Print:
+		panic("Tried to evaluate action node!")
 	}
-
-	return false
+	return nil
 }
 
-execute_nodes :: proc(graph: ^Graph, builder: ^strings.Builder){
-	executed_nodes := 0
-	for it := hm.iterator_make(&graph.nodes); node, node_handle in hm.iterate(&it) {
-		if execute_node(graph, node_handle, builder) {
-			executed_nodes += 1
-		}
+evaluate_pin_value :: proc(graph: ^Graph, node_handle: Node_Handle, pin_index: int) -> Pin_Data {
+	node := hm.get(&graph.nodes, node_handle)
+	pin_handle := Pin_Handle {
+		node  = node_handle,
+		index = u8(pin_index),
 	}
 
-	if executed_nodes != int(hm.len(graph.nodes)) {
-		execute_nodes(graph, builder)
+	if link, found := find_incoming_link(graph, pin_handle); found {
+		from_def := NODE_DEFINITIONS[hm.get(&graph.nodes, link.from.node).type]
+		from_output_index := int(link.from.index) - len(from_def.inputs)
+		return evaluate_data_node(graph, link.from.node, from_output_index)
+	}
+
+	return node.inputs[pin_index].data
+}
+
+execute_from_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^strings.Builder) {
+	node := hm.get(&graph.nodes, node_handle)
+	definition := NODE_DEFINITIONS[node.type]
+
+	switch node.type {
+	case .Print:
+		val := evaluate_pin_value(graph, node_handle, 1)
+		if num, ok := val.(int); ok {
+			fmt.sbprintf(builder, "%d\n", num)
+		} else {
+			fmt.sbprintf(builder, "<nil>\n")
+		}
+
+	case .Begin, .Add:
+	}
+
+	for pin, i in definition.outputs {
+		if pin.type == .Execution {
+			out_pin_index := len(definition.inputs) + i
+			out_pin_handle := Pin_Handle {
+				node  = node_handle,
+				index = u8(out_pin_index),
+			}
+
+			for it := hm.iterator_make(&graph.links); link, _ in hm.iterate(&it) {
+				if link.from == out_pin_handle {
+					execute_from_node(graph, link.to.node, builder)
+				}
+			}
+		}
 	}
 }
 
@@ -202,7 +245,12 @@ run_graph :: proc(graph: ^Graph) {
 	builder: strings.Builder
 	strings.builder_init(&builder)
 
-	execute_nodes(graph, &builder)
+	for it := hm.iterator_make(&graph.nodes); node, handle in hm.iterate(&it) {
+		if node.type == .Begin {
+			execute_from_node(graph, handle, &builder)
+			break
+		}
+	}
 
 	g.output = strings.to_string(builder)
 }
@@ -218,7 +266,7 @@ init :: proc() {
 	run_graph(&g.graph)
 }
 
-draw_node :: proc(node: Node) {
+draw_node :: proc(node: Base_Node) {
 	definition := NODE_DEFINITIONS[node.type]
 
 	k2.draw_rect_vec(node.position, {200, 100}, k2.DARK_GRAY)
@@ -226,7 +274,8 @@ draw_node :: proc(node: Node) {
 
 	for pin, i in definition.inputs {
 		pin_pos := node.position + {0, f32(30 + i * 20)}
-		k2.draw_circle(pin_pos, 5, k2.BLUE)
+		color := pin.type == .Execution ? k2.YELLOW : k2.BLUE
+		k2.draw_circle(pin_pos, 5, color)
 		pin_text :=
 			node.inputs[i].data != nil ? fmt.tprintf("%s: %v", pin.name, node.inputs[i].data) : pin.name
 		k2.draw_text(pin_text, pin_pos + {10, -8}, 16, k2.WHITE)
@@ -234,7 +283,8 @@ draw_node :: proc(node: Node) {
 
 	for pin, i in definition.outputs {
 		pin_pos := node.position + {200, f32(30 + i * 20)}
-		k2.draw_circle(pin_pos, 5, k2.GREEN)
+		color := pin.type == .Execution ? k2.YELLOW : k2.GREEN
+		k2.draw_circle(pin_pos, 5, color)
 		k2.draw_text(pin.name, pin_pos + {-50, -8}, 16, k2.WHITE)
 	}
 }
@@ -247,11 +297,13 @@ draw_link :: proc(link: Link) {
 	to_def := NODE_DEFINITIONS[to_node.type]
 
 	from_pin_index := int(link.from.index) - len(from_def.inputs)
-	from_pin_pos := from_node.position + {200, f32(30 + from_pin_index * 20)}
+	from_pin := from_def.outputs[from_pin_index]
 
+	from_pin_pos := from_node.position + {200, f32(30 + from_pin_index * 20)}
 	to_pin_pos := to_node.position + {0, f32(30 + link.to.index * 20)}
 
-	k2.draw_line(from_pin_pos, to_pin_pos, 3, k2.YELLOW)
+	color := from_pin.type == .Execution ? k2.YELLOW : k2.WHITE
+	k2.draw_line(from_pin_pos, to_pin_pos, 3, color)
 }
 
 step :: proc() -> bool {
@@ -264,7 +316,9 @@ step :: proc() -> bool {
 	// Update
 
 	for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
-		if k2.mouse_button_went_down(.Left) {
+		if k2.mouse_button_went_up(.Left) {
+			g.mouse_grabbed_node = {}
+		} else if k2.mouse_button_went_down(.Left) {
 			mouse_pos := k2.get_mouse_position()
 			node_rect := k2.rect_from_pos_size(node.position, {200, 100})
 
@@ -294,6 +348,10 @@ step :: proc() -> bool {
 	}
 
 	k2.draw_text(fmt.tprintf("Output:\n%s", g.output), {10, 10}, 20, k2.BLACK)
+
+	stats_text := fmt.tprintf("%d nodes, %d links", hm.len(g.graph.nodes), hm.len(g.graph.links))
+	text_size := k2.measure_text(stats_text, 20)
+	k2.draw_text(stats_text, k2.get_screen_size() - {text_size.x + 25, 45}, 20, k2.BLACK)
 
 	k2.present()
 
