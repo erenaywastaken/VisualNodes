@@ -3,6 +3,7 @@ package nodes
 import k2 "../karl2d"
 import hm "core:container/handle_map"
 import "core:fmt"
+import "core:strings"
 
 MAX_PINS_PER_NODE :: 5
 
@@ -78,6 +79,7 @@ AppState :: struct {
 	graph:              Graph,
 	mouse_grabbed_node: Node_Handle,
 	mouse_grab_offset:  k2.Vec2,
+	output:             string,
 }
 g: AppState
 
@@ -154,11 +156,66 @@ print_graph :: proc(graph: ^Graph) {
 	}
 }
 
+execute_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^strings.Builder) -> bool {
+	node := hm.get(&graph.nodes, node_handle)
+	switch node.type {
+	case .Add:
+		if node.inputs[0].data == nil || node.inputs[1].data == nil {
+			return false
+		}
+		a := node.inputs[0].data.(int)
+		b := node.inputs[1].data.(int)
+		sum := a + b
+
+		for it2 := hm.iterator_make(&graph.links); link, link_handle in hm.iterate(&it2) {
+			if link.from.node == node_handle && link.from.index == 2 {
+				to_node := hm.get(&graph.nodes, link.to.node)
+				to_node.inputs[link.to.index].data = sum
+				execute_node(graph, link.to.node, builder)
+			}
+		}
+		return true
+	case .Print:
+		if value, exists := node.inputs[0].data.(int); exists {
+			fmt.sbprintf(builder, "%d\n", value)
+			return true
+		}
+	}
+
+	return false
+}
+
+execute_nodes :: proc(graph: ^Graph, builder: ^strings.Builder){
+	executed_nodes := 0
+	for it := hm.iterator_make(&graph.nodes); node, node_handle in hm.iterate(&it) {
+		if execute_node(graph, node_handle, builder) {
+			executed_nodes += 1
+		}
+	}
+
+	if executed_nodes != int(hm.len(graph.nodes)) {
+		execute_nodes(graph, builder)
+	}
+}
+
+run_graph :: proc(graph: ^Graph) {
+	builder: strings.Builder
+	strings.builder_init(&builder)
+
+	execute_nodes(graph, &builder)
+
+	g.output = strings.to_string(builder)
+}
+
 init :: proc() {
 	k2.init(1280, 720, "VisualNodes", {window_mode = .Windowed_Resizable})
 
 	create_test_graph(&g.graph)
 	print_graph(&g.graph)
+	run_graph(&g.graph)
+	// Try again to make sure there's no state bug
+	delete(g.output)
+	run_graph(&g.graph)
 }
 
 draw_node :: proc(node: Node) {
@@ -235,6 +292,8 @@ step :: proc() -> bool {
 	for it := hm.iterator_make(&g.graph.links); link, handle in hm.iterate(&it) {
 		draw_link(link^)
 	}
+
+	k2.draw_text(fmt.tprintf("Output:\n%s", g.output), {10, 10}, 20, k2.BLACK)
 
 	k2.present()
 
