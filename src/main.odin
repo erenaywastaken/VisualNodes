@@ -5,15 +5,29 @@ import hm "core:container/handle_map"
 
 MAX_PINS_PER_NODE :: 5
 
-Node_Definition :: struct {
-	name:         string,
-	input_count:  int,
-	output_count: int,
+Pin_Type :: enum {
+	Integer,
+	String,
 }
 
-NODE_DEFINITIONS := [?]Node_Definition {
-	{name = "Add", input_count = 2, output_count = 1},
-	{name = "Print", input_count = 1, output_count = 0},
+Pin_Definition :: struct {
+	name: string,
+	type: Pin_Type,
+}
+
+Node_Definition :: struct {
+	name:    string,
+	inputs:  []Pin_Definition,
+	outputs: []Pin_Definition,
+}
+
+NODE_DEFINITIONS := [Node_Type]Node_Definition {
+	.Add = {
+		name = "Add",
+		inputs = {{"A", .Integer}, {"B", .Integer}},
+		outputs = {{"Out", .Integer}},
+	},
+	.Print = {name = "Print", inputs = {{"Number", .Integer}}},
 }
 
 Node_Type :: enum {
@@ -25,20 +39,13 @@ Node :: struct {
 	handle:   Node_Handle,
 	type:     Node_Type,
 	position: k2.Vec2,
-	inputs:   [MAX_PINS_PER_NODE]Pin_Handle,
-	outputs:  [MAX_PINS_PER_NODE]Pin_Handle,
+	inputs:   [MAX_PINS_PER_NODE]Pin,
+	outputs:  [MAX_PINS_PER_NODE]Pin,
 }
 
 Pin :: struct {
-	handle:    Pin_Handle,
-	node:      Node_Handle,
-	direction: Pin_Direction,
-	data:      Pin_Data,
-}
-
-Pin_Direction :: enum {
-	Input,
-	Output,
+	node: Node_Handle,
+	data: Pin_Data,
 }
 
 Pin_Data :: union {
@@ -52,12 +59,18 @@ Link :: struct {
 }
 
 Node_Handle :: distinct hm.Handle32
-Pin_Handle :: distinct hm.Handle32
 Link_Handle :: distinct hm.Handle32
+
+Pin_Handle :: struct {
+	node:  Node_Handle,
+	// For inputs: indexof(Pin, node.inputs)
+	// For outputs: len(node.inputs) + indexof(Pin, node.outputs)
+	// Saves us from an extra is_output bool lol
+	index: u8,
+}
 
 Graph :: struct {
 	nodes: hm.Dynamic_Handle_Map(Node, Node_Handle),
-	pins:  hm.Dynamic_Handle_Map(Pin, Pin_Handle),
 	links: hm.Dynamic_Handle_Map(Link, Link_Handle),
 }
 
