@@ -4,8 +4,8 @@ import k2 "../karl2d"
 import hm "core:container/handle_map"
 import "core:fmt"
 
-
 AppState :: struct {
+	k2_state:           ^k2.State,
 	graph:              Graph,
 	mouse_grabbed_node: Node_Handle,
 	mouse_grab_offset:  k2.Vec2,
@@ -20,7 +20,8 @@ main :: proc() {
 }
 
 init :: proc() {
-	k2.init(1280, 720, "VisualNodes", {window_mode = .Windowed_Resizable})
+	g.k2_state = k2.init(1280, 720, "VisualNodes", {window_mode = .Windowed_Resizable})
+	setup_clay()
 
 	create_test_graph(&g.graph)
 	print_graph(&g.graph)
@@ -78,6 +79,8 @@ step :: proc() -> bool {
 	defer free_all(context.temp_allocator)
 
 	// Update
+	clay_update_state()
+
 	if k2.mouse_button_went_up(.Left) {
 		g.mouse_grabbed_node = {}
 	} else if k2.mouse_button_went_down(.Left) {
@@ -122,5 +125,7 @@ step :: proc() -> bool {
 }
 
 shutdown :: proc() {
+	hm.dynamic_destroy(&g.graph.nodes)
+	hm.dynamic_destroy(&g.graph.links)
 	k2.shutdown()
 }
