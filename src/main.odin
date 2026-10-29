@@ -314,11 +314,10 @@ step :: proc() -> bool {
 	defer free_all(context.temp_allocator)
 
 	// Update
-
-	for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
-		if k2.mouse_button_went_up(.Left) {
-			g.mouse_grabbed_node = {}
-		} else if k2.mouse_button_went_down(.Left) {
+	if k2.mouse_button_went_up(.Left) {
+		g.mouse_grabbed_node = {}
+	} else if k2.mouse_button_went_down(.Left) {
+		for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
 			mouse_pos := k2.get_mouse_position()
 			node_rect := k2.rect_from_pos_size(node.position, {200, 100})
 
