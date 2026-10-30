@@ -10,6 +10,8 @@ AppState :: struct {
 	mouse_grabbed_node: Node_Handle,
 	mouse_grab_offset:  k2.Vec2,
 	output:             string,
+
+	// ui: UI_State,
 }
 g: AppState
 
@@ -101,23 +103,25 @@ step :: proc() -> bool {
 		node.position = k2.get_mouse_position() - g.mouse_grab_offset
 	}
 
-	k2.clear(k2.LIGHT_BLUE)
-
 	// Draw
+	k2.clear(k2.BLACK)
 
-	for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
-		draw_node(node^)
-	}
+	ui_cmds := do_ui()
+	clay_render(&ui_cmds)
 
-	for it := hm.iterator_make(&g.graph.links); link, handle in hm.iterate(&it) {
-		draw_link(link^)
-	}
+	// for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
+	// 	draw_node(node^)
+	// }
 
-	k2.draw_text(fmt.tprintf("Output:\n%s", g.output), {10, 10}, 20, k2.BLACK)
+	// for it := hm.iterator_make(&g.graph.links); link, handle in hm.iterate(&it) {
+	// 	draw_link(link^)
+	// }
 
-	stats_text := fmt.tprintf("%d nodes, %d links", hm.len(g.graph.nodes), hm.len(g.graph.links))
-	text_size := k2.measure_text(stats_text, 20)
-	k2.draw_text(stats_text, k2.get_screen_size() - {text_size.x + 25, 45}, 20, k2.BLACK)
+	// k2.draw_text(fmt.tprintf("Output:\n%s", g.output), {10, 10}, 20, k2.BLACK)
+
+	// stats_text := fmt.tprintf("%d nodes, %d links", hm.len(g.graph.nodes), hm.len(g.graph.links))
+	// text_size := k2.measure_text(stats_text, 20)
+	// k2.draw_text(stats_text, k2.get_screen_size() - {text_size.x + 25, 45}, 20, k2.BLACK)
 
 	k2.present()
 
