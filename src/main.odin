@@ -38,47 +38,6 @@ init :: proc() {
 	run_graph(&g.graph)
 }
 
-draw_node :: proc(node: Node) {
-	definition := NODE_DEFINITIONS[node.type]
-
-	k2.draw_rect_vec(node.position, {200, 100}, k2.DARK_GRAY)
-	k2.draw_text(definition.name, node.position, 20, k2.WHITE)
-
-	for pin, i in definition.inputs {
-		pin_pos := node.position + {0, f32(30 + i * 20)}
-		color := pin.type == .Execution ? k2.YELLOW : k2.BLUE
-		k2.draw_circle(pin_pos, 5, color)
-		pin_text :=
-			node.inputs[i].data != nil ? fmt.tprintf("%s: %v", pin.name, node.inputs[i].data) : pin.name
-		k2.draw_text(pin_text, pin_pos + {10, -8}, 16, k2.WHITE)
-	}
-
-	for pin, i in definition.outputs {
-		pin_pos := node.position + {200, f32(30 + i * 20)}
-		color := pin.type == .Execution ? k2.YELLOW : k2.GREEN
-		k2.draw_circle(pin_pos, 5, color)
-		k2.draw_text(pin.name, pin_pos + {-50, -8}, 16, k2.WHITE)
-	}
-}
-
-draw_link :: proc(link: Link) {
-	from_node := hm.get(&g.graph.nodes, link.from.node)
-	to_node := hm.get(&g.graph.nodes, link.to.node)
-
-	from_def := NODE_DEFINITIONS[from_node.type]
-	to_def := NODE_DEFINITIONS[to_node.type]
-
-	from_pin_index := int(link.from.index) - len(from_def.inputs)
-	from_pin := from_def.outputs[from_pin_index]
-
-	from_pin_pos := from_node.position + {200, f32(30 + from_pin_index * 20)}
-	to_pin_pos := to_node.position + {0, f32(30 + link.to.index * 20)}
-
-	color :=
-		from_pin.type == .Execution ? clay_color_to_k2_color(COLOR_YELLOW) : clay_color_to_k2_color(COLOR_TEAL)
-	k2.draw_line(from_pin_pos, to_pin_pos, 3, color)
-}
-
 step :: proc() -> bool {
 	if !k2.update() {
 		return false

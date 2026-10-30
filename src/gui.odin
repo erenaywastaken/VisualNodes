@@ -208,6 +208,11 @@ node_element :: proc(node: ^Node, i: int) {
 	}
 }
 
+pin_id :: proc(h: Pin_Handle) -> clay.ElementId {
+	// Pack the node handle and pin index into a single unique u32
+	return clay.ID("PinCircle", u32(h.node.idx) << 8 | u32(h.index))
+}
+
 pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 	if clay.UI(clay.ID_LOCAL("Pin", i))(
 	{
@@ -230,24 +235,27 @@ pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 			pin_text = pin.name
 		}
 
+		pin_index := is_input ? u8(i) : u8(len(NODE_DEFINITIONS[node.type].inputs)) + u8(i)
+		id := pin_id(Pin_Handle{node = node.handle, index = pin_index})
+
 		if is_input {
-			circle_element(color, i)
+			circle_element(color, id)
 			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
 		} else {
 			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
-			circle_element(color, i)
+			circle_element(color, id)
 		}
 	}
 }
 
-circle_element :: proc(color: clay.Color, i: u32 = 0, radius: f32 = 5) {
+circle_element :: proc(color: clay.Color, id: clay.ElementId, radius: f32 = 5) {
 	custom_element := new(Clay_Custom_Element, context.temp_allocator)
 	custom_element^ = Clay_Custom_Element_Circle {
-		radius = 5,
+		radius = radius,
 		color  = color,
 	}
 
-	if clay.UI(clay.ID_LOCAL("Circle", i))(
+	if clay.UI(id)(
 	{
 		layout = {
 			sizing = {width = clay.SizingFixed(radius * 2), height = clay.SizingFixed(radius * 2)},
@@ -265,6 +273,29 @@ link_element :: proc(link: Link, i: int) {
 	if clay.UI(clay.ID("Link", u32(i)))(
 	{floating = {attachTo = .Parent}, custom = {customData = custom_element}},
 	) {}
+}
+
+pin_position :: proc(h: Pin_Handle) -> (pos: k2.Vec2, ok: bool) {
+	data := clay.GetElementData(pin_id(h))
+	if !data.found {
+		return {}, false
+	}
+	bb := data.boundingBox
+	return {bb.x + bb.width / 2, bb.y + bb.height / 2}, true
+}
+
+draw_link :: proc(link: Link) {
+	from_pos, ok_from := pin_position(link.from)
+	to_pos, ok_to := pin_position(link.to)
+	if !ok_from || !ok_to do return
+
+	from_node := hm.get(&g.graph.nodes, link.from.node)
+	from_def := NODE_DEFINITIONS[from_node.type]
+	from_pin := from_def.outputs[int(link.from.index) - len(from_def.inputs)]
+
+	color :=
+		from_pin.type == .Execution ? clay_color_to_k2_color(COLOR_YELLOW) : clay_color_to_k2_color(COLOR_TEAL)
+	k2.draw_line(from_pos, to_pos, 3, color)
 }
 
 do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
