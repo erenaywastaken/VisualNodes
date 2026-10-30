@@ -3,6 +3,7 @@ package nodes
 import k2 "../karl2d"
 import hm "core:container/handle_map"
 import "core:fmt"
+import "core:time"
 
 AppState :: struct {
 	k2_state:              ^k2.State,
@@ -10,6 +11,8 @@ AppState :: struct {
 	mouse_grabbed_node:    Node_Handle,
 	mouse_grab_offset:     k2.Vec2,
 	output:                string,
+	last_execution_date:   time.Time,
+	last_execution_time:   time.Duration,
 	last_frame_times:      [60]f32,
 	last_frame_time_index: int,
 }

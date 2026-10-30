@@ -3,6 +3,7 @@ package nodes
 import hm "core:container/handle_map"
 import "core:fmt"
 import "core:strings"
+import "core:time"
 
 find_incoming_link :: proc(graph: ^Graph, pin_handle: Pin_Handle) -> (Link, bool) {
 	for it := hm.iterator_make(&graph.links); link, _ in hm.iterate(&it) {
@@ -85,6 +86,8 @@ execute_from_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^str
 }
 
 run_graph :: proc(graph: ^Graph) {
+	start := time.now()
+
 	builder: strings.Builder
 	strings.builder_init(&builder)
 
@@ -96,4 +99,8 @@ run_graph :: proc(graph: ^Graph) {
 	}
 
 	g.output = strings.to_string(builder)
+	
+	now := time.now()
+	g.last_execution_time = time.diff(start, now)
+	g.last_execution_date = now
 }

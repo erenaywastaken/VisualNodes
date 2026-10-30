@@ -15,6 +15,7 @@ COLOR_TEXT :: clay.Color{76, 79, 105, 255}
 
 COLOR_BLUE :: clay.Color{30, 102, 245, 255}
 COLOR_MAUVE :: clay.Color{136, 57, 239, 255}
+COLOR_MAROON :: clay.Color{230, 69, 83, 255}
 COLOR_PEACH :: clay.Color{254, 100, 11, 255}
 COLOR_RED :: clay.Color{210, 15, 57, 255}
 COLOR_GREEN :: clay.Color{64, 160, 43, 255}
@@ -56,6 +57,36 @@ top_bar :: proc() {
 			top_bar_item("Edit")
 			top_bar_item("View")
 			top_bar_item("Examples")
+		}
+
+		if clay.UI(clay.ID("TopBarSpacer"))(
+		{layout = {sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})}}},
+		) {}
+
+		run_button()
+	}
+}
+
+dim :: proc(color: clay.Color, factor: f32 = 0.8) -> clay.Color {
+	return {**(color.rgb * factor), color.a}
+}
+
+run_button :: proc() {
+	if clay.UI(clay.ID("RunButton"))(
+	{
+		layout = {
+			sizing = {width = clay.SizingFixed(90), height = clay.SizingGrow({})},
+			padding = {left = 12, right = 12, top = 6, bottom = 6},
+			childAlignment = {x = .Center, y = .Center},
+		},
+		backgroundColor = clay.Hovered() ? dim(COLOR_GREEN) : COLOR_GREEN,
+		cornerRadius = clay.CornerRadiusAll(4),
+	},
+	) {
+		clay.Text("Run", {fontSize = 14, textColor = COLOR_WHITE})
+
+		if clay_mouse_pressed() {
+			run_graph(&g.graph)
 		}
 	}
 }
@@ -318,8 +349,27 @@ output_box :: proc() {
 		cornerRadius = {topRight = 16},
 	},
 	) {
-		clay.Text("Output:", {fontSize = 16, textColor = COLOR_TEXT})
-		clay.Text(g.output, {fontSize = 14, textColor = COLOR_TEXT})
+		if clay.UI(clay.ID("OutputBoxHeader"))(
+		{
+			layout = {
+				layoutDirection = .LeftToRight,
+				sizing = {width = clay.SizingFit({}), height = clay.SizingFit({})},
+				childGap = 10,
+				childAlignment = {x = .Left, y = .Center},
+			},
+		},
+		) {
+			clay.Text("Output", {fontSize = 18, textColor = COLOR_TEXT})
+			clay.Text(
+				fmt.tprintf(
+					"Executed at %v in %v",
+					g.last_execution_date,
+					g.last_execution_time
+				),
+				{fontSize = 14, textColor = COLOR_TEXT},
+			)
+		}
+		clay.Text(g.output, {fontSize = 18, textColor = COLOR_TEXT})
 	}
 }
 
