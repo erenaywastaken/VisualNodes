@@ -2,11 +2,14 @@ package nodes
 
 import k2 "../karl2d"
 import hm "core:container/handle_map"
-import "core:fmt"
+import "core:strings"
+import "core:strconv"
 import "core:time"
 
 AppState :: struct {
 	k2_state:              ^k2.State,
+	cursor:                k2.Cursor,
+	previous_cursor:       k2.Cursor,
 	graph:                 Graph,
 	output:                string,
 	last_execution_date:   time.Time,
@@ -25,8 +28,8 @@ main :: proc() {
 
 init :: proc() {
 	g.k2_state = k2.init(
-		1280,
-		720,
+		960,
+		540,
 		"VisualNodes",
 		{window_mode = .Windowed_Resizable, anti_alias = true},
 	)
@@ -71,12 +74,37 @@ step :: proc() -> bool {
 		node.position = k2.get_mouse_position() - g.ui.grab_offset
 	}
 
+	if k2.mouse_button_went_down(.Left) {
+		if g.ui.editing_pin != nil {
+			text := strings.to_string(g.ui.text_edit.builder)
+			node := hm.get(&g.graph.nodes, g.ui.editing_pin.?.node)
+			switch v in node.inputs[g.ui.editing_pin.?.index].data {
+			case string:
+				node.inputs[g.ui.editing_pin.?.index].data = text
+			case int:
+				if num, ok := strconv.parse_int(text); ok {
+					node.inputs[g.ui.editing_pin.?.index].data = num
+				}
+			}
+		}
+		g.ui.editing_pin = nil
+	}
+
+	g.cursor = .Default
+
 	ui_cmds := do_ui()
 
 	// This has to run after UI logic,
 	// so we don't forget the grabbed pin when the mouse is released over a pin
 	if k2.mouse_button_went_up(.Left) {
 		g.ui.grabbed_pin = nil
+	}
+
+	// set_cursor() directly calls the OS API,
+	// so I thought it would be better to cache the states
+	if g.cursor != g.previous_cursor {
+		k2.set_cursor(g.cursor)
+		g.previous_cursor = g.cursor
 	}
 
 	// Draw

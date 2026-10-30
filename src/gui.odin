@@ -4,6 +4,7 @@ import "../clay"
 import k2 "../karl2d"
 import hm "core:container/handle_map"
 import "core:fmt"
+import "core:strings"
 
 // Catppuccin Latte
 
@@ -101,6 +102,8 @@ UI_State :: struct {
 	grab_offset:        k2.Vec2,
 	grabbed_pin:        Maybe(Pin_Handle),
 	open_menu:          string,
+	text_edit:          Text_Edit_State,
+	editing_pin:        Maybe(Pin_Handle),
 }
 
 top_bar_item :: proc(label: string) {
@@ -257,6 +260,81 @@ pin_id :: proc(h: Pin_Handle) -> clay.ElementId {
 	return clay.ID("PinCircle", u32(h.node.idx) << 8 | u32(h.index))
 }
 
+Text_Edit_State :: struct {
+	builder: strings.Builder,
+}
+
+pin_text_box :: proc(handle: Pin_Handle, i: u32) {
+	if clay.UI(clay.ID_LOCAL("PinTextBox", i))(
+	{
+		layout = {
+			sizing = {width = clay.SizingFit({min = 50}), height = clay.SizingFixed(16)},
+			childAlignment = {y = .Center},
+			padding = {left = 2, right = 2},
+		},
+		border = {
+			width = clay.BorderAll(1),
+			color = g.ui.editing_pin == handle ? COLOR_BLUE : COLOR_OVERLAY,
+		},
+		backgroundColor = COLOR_WHITE,
+	},
+	) {
+
+
+		text: string
+		if g.ui.editing_pin == handle {
+			if clay.Hovered() {
+				g.cursor = .Text
+			}
+
+			for c in k2.get_typed_runes() {
+				strings.write_rune(&g.ui.text_edit.builder, c)
+			}
+
+			if (k2.key_went_down(.Backspace)) {
+				strings.pop_rune(&g.ui.text_edit.builder)
+			}
+
+			clay.Text(
+				strings.to_string(g.ui.text_edit.builder),
+				{fontSize = 14, textColor = COLOR_BLACK},
+			)
+		}
+	}
+}
+
+input_pin_value :: proc(node: ^Node, pin: Pin_Handle, def: Pin_Definition, i: u32) {
+	if clay.UI(clay.ID_LOCAL("InputPinText", i))(
+	{
+		layout = {
+			sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})},
+			childAlignment = {y = .Center, x = .Left},
+			childGap = 4,
+		},
+	},
+	) {
+		if clay_mouse_pressed() {
+			g.ui.editing_pin = pin
+			g.ui.node_grab_consumed = true
+			strings.builder_reset(&g.ui.text_edit.builder)
+			if node.inputs[pin.index].data != nil {
+				fmt.sbprint(&g.ui.text_edit.builder, node.inputs[pin.index].data)
+			}
+		}
+
+		text := def.name
+		if g.ui.editing_pin != pin && node.inputs[pin.index].data != nil {
+			text = fmt.tprintf("%s: %v", def.name, node.inputs[pin.index].data)
+		}
+
+		clay.Text(text, {fontSize = 14, textColor = COLOR_TEXT})
+
+		if g.ui.editing_pin == pin {
+			pin_text_box(pin, i)
+		}
+	}
+}
+
 pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 	if clay.UI(clay.ID_LOCAL("Pin", i))(
 	{
@@ -270,15 +348,6 @@ pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 	) {
 		color := pin.type == .Execution ? COLOR_YELLOW : (is_input ? COLOR_BLUE : COLOR_GREEN)
 
-
-		pin_text: string
-		if is_input {
-			pin_text =
-				node.inputs[i].data != nil ? fmt.tprintf("%s: %v", pin.name, node.inputs[i].data) : pin.name
-		} else {
-			pin_text = pin.name
-		}
-
 		pin_index := is_input ? u8(i) : u8(len(NODE_DEFINITIONS[node.type].inputs)) + u8(i)
 		pin_handle := Pin_Handle {
 			node  = node.handle,
@@ -287,9 +356,13 @@ pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 
 		if is_input {
 			pin_circle(color, pin_handle)
-			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
+			if pin.type != .Execution {
+				input_pin_value(node, pin_handle, pin, i)
+			} else {
+				clay.Text(pin.name, {fontSize = 14, textColor = COLOR_TEXT})
+			}
 		} else {
-			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
+			clay.Text(pin.name, {fontSize = 14, textColor = COLOR_TEXT})
 			pin_circle(color, pin_handle)
 		}
 	}
@@ -313,17 +386,8 @@ pin_circle :: proc(color: clay.Color, pin_handle: Pin_Handle, radius: f32 = 5) {
 		if clay_mouse_pressed() {
 			g.ui.grabbed_pin = pin_handle
 			g.ui.node_grab_consumed = true
-			fmt.printf(
-				"Grabbed pin: %s\n",
-				NODE_DEFINITIONS[hm.get(&g.graph.nodes, pin_handle.node).type].name,
-			)
 		} else if clay_mouse_released() && g.ui.grabbed_pin != nil {
 			add_link(&g.graph, g.ui.grabbed_pin.?, pin_handle)
-			fmt.printf(
-				"Created link: %s -> %s\n",
-				NODE_DEFINITIONS[hm.get(&g.graph.nodes, g.ui.grabbed_pin.?.node).type].name,
-				NODE_DEFINITIONS[hm.get(&g.graph.nodes, pin_handle.node).type].name,
-			)
 		}
 	}
 }
