@@ -25,12 +25,12 @@ Node_Type :: enum {
 }
 
 NODE_DEFINITIONS := [Node_Type]Node_Definition {
-	.Begin = {name = "Begin", color = COLOR_TEAL, inputs = {}, outputs = {{"Exec", .Execution}}},
+	.Begin = {name = "Begin", color = COLOR_TEAL, inputs = {}, outputs = {{"Prg", .Execution}}},
 	.Add = {
 		name = "Add",
 		color = COLOR_ROSEWATER,
 		inputs = {{"A", .Integer}, {"B", .Integer}},
 		outputs = {{"Out", .Integer}},
 	},
-	.Print = {name = "Print", color = COLOR_MAUVE, inputs = {{"Exec", .Execution}, {"Number", .Integer}}, outputs = {}},
+	.Print = {name = "Print", color = COLOR_MAUVE, inputs = {{"Prg", .Execution}, {"Number", .Integer}}, outputs = {}},
 }

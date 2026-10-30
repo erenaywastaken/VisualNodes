@@ -5,13 +5,13 @@ import hm "core:container/handle_map"
 import "core:fmt"
 
 AppState :: struct {
-	k2_state:           ^k2.State,
-	graph:              Graph,
-	mouse_grabbed_node: Node_Handle,
-	mouse_grab_offset:  k2.Vec2,
-	output:             string,
-
-	// ui: UI_State,
+	k2_state:              ^k2.State,
+	graph:                 Graph,
+	mouse_grabbed_node:    Node_Handle,
+	mouse_grab_offset:     k2.Vec2,
+	output:                string,
+	last_frame_times:      [60]f32,
+	last_frame_time_index: int,
 }
 g: AppState
 
@@ -38,6 +38,14 @@ init :: proc() {
 	run_graph(&g.graph)
 }
 
+get_average_frame_time :: proc() -> f32 {
+	sum: f32 = 0.0
+	for time in g.last_frame_times {
+		sum += time
+	}
+	return sum / len(g.last_frame_times)
+}
+
 step :: proc() -> bool {
 	if !k2.update() {
 		return false
@@ -46,6 +54,9 @@ step :: proc() -> bool {
 	defer free_all(context.temp_allocator)
 
 	// Update
+	g.last_frame_times[g.last_frame_time_index] = k2.get_frame_time()
+	g.last_frame_time_index = (g.last_frame_time_index + 1) % len(g.last_frame_times)
+
 	clay_update_state()
 
 	if k2.mouse_button_went_up(.Left) {
@@ -62,20 +73,6 @@ step :: proc() -> bool {
 
 	ui_cmds := do_ui()
 	clay_render(&ui_cmds)
-
-	// for it := hm.iterator_make(&g.graph.nodes); node, handle in hm.iterate(&it) {
-	// 	draw_node(node^)
-	// }
-
-	// for it := hm.iterator_make(&g.graph.links); link, handle in hm.iterate(&it) {
-	// 	draw_link(link^)
-	// }
-
-	// k2.draw_text(fmt.tprintf("Output:\n%s", g.output), {10, 10}, 20, k2.BLACK)
-
-	// stats_text := fmt.tprintf("%d nodes, %d links", hm.len(g.graph.nodes), hm.len(g.graph.links))
-	// text_size := k2.measure_text(stats_text, 20)
-	// k2.draw_text(stats_text, k2.get_screen_size() - {text_size.x + 25, 45}, 20, k2.BLACK)
 
 	k2.present()
 

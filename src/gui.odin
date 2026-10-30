@@ -22,6 +22,9 @@ COLOR_TEAL :: clay.Color{23, 146, 153, 255}
 COLOR_YELLOW :: clay.Color{223, 142, 29, 255}
 COLOR_ROSEWATER :: clay.Color{220, 138, 120, 255}
 
+COLOR_BLACK :: clay.Color{0, 0, 0, 255}
+COLOR_WHITE :: clay.Color{255, 255, 255, 255}
+
 clay_mouse_pressed :: proc() -> bool {
 	return clay.Hovered() && clay.GetPointerState().state == .PressedThisFrame
 }
@@ -90,6 +93,7 @@ top_bar_dropdown :: proc() {
 			attachTo = .ElementWithId,
 			parentId = clay.ID(open_menu).id,
 			attachment = {parent = .LeftBottom},
+			zIndex = 100,
 		},
 		backgroundColor = COLOR_MANTLE,
 	},
@@ -157,7 +161,7 @@ node_element :: proc(node: ^Node, i: int) {
 			cornerRadius = {topLeft = 16, topRight = 16, bottomLeft = 0, bottomRight = 0},
 		},
 		) {
-			clay.Text(NODE_DEFINITIONS[node.type].name, {fontSize = 18, textColor = 255})
+			clay.Text(NODE_DEFINITIONS[node.type].name, {fontSize = 18, textColor = COLOR_WHITE})
 		}
 
 		if clay.UI(clay.ID("NodeBody", u32(i)))(
@@ -298,6 +302,55 @@ draw_link :: proc(link: Link) {
 	k2.draw_line(from_pos, to_pos, 3, color)
 }
 
+output_box :: proc() {
+	if clay.UI(clay.ID("OutputBox"))(
+	{
+		layout = {
+			layoutDirection = .TopToBottom,
+			sizing = {width = clay.SizingFit({min = 400}), height = clay.SizingFit({})},
+			padding = clay.PaddingAll(10),
+		},
+		floating = {
+			attachTo = .Parent,
+			attachment = {parent = .LeftBottom, element = .LeftBottom},
+		},
+		backgroundColor = COLOR_MANTLE,
+		cornerRadius = {topRight = 16},
+	},
+	) {
+		clay.Text("Output:", {fontSize = 16, textColor = COLOR_TEXT})
+		clay.Text(g.output, {fontSize = 14, textColor = COLOR_TEXT})
+	}
+}
+
+stats_box :: proc() {
+	if clay.UI(clay.ID("StatsBox"))(
+	{
+		layout = {
+			layoutDirection = .TopToBottom,
+			sizing = {width = clay.SizingFit({}), height = clay.SizingFit({})},
+			padding = clay.PaddingAll(10),
+			childAlignment = {x = .Right, y = .Top},
+		},
+		floating = {
+			attachTo = .Parent,
+			attachment = {parent = .RightBottom, element = .RightBottom},
+		},
+	},
+	) {
+		stats_text := fmt.tprintf(
+			"%d nodes, %d links",
+			hm.len(g.graph.nodes),
+			hm.len(g.graph.links),
+		)
+		clay.Text(stats_text, {fontSize = 14, textColor = COLOR_TEXT})
+
+		avg_dt := get_average_frame_time()
+		fps_text := fmt.tprintf("FPS: %.2f / %.2f ms", 1.0 / avg_dt, avg_dt * 1000.0)
+		clay.Text(fps_text, {fontSize = 14, textColor = COLOR_TEXT})
+	}
+}
+
 do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 
@@ -327,6 +380,9 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			node_element(node, i)
 			i += 1
 		}
+
+		output_box()
+		stats_box()
 	}
 
 	return clay.EndLayout(k2.get_frame_time())
