@@ -30,6 +30,10 @@ clay_mouse_pressed :: proc() -> bool {
 	return clay.Hovered() && clay.GetPointerState().state == .PressedThisFrame
 }
 
+clay_mouse_released :: proc() -> bool {
+	return clay.Hovered() && clay.GetPointerState().state == .ReleasedThisFrame
+}
+
 clay_mouse_down :: proc() -> bool {
 	return clay.Hovered() && clay.GetPointerState().state == .Pressed
 }
@@ -53,9 +57,9 @@ top_bar :: proc() {
 			},
 		},
 		) {
-			top_bar_item("File")
-			top_bar_item("Edit")
-			top_bar_item("View")
+			// top_bar_item("File")
+			// top_bar_item("Edit")
+			// top_bar_item("View")
 			top_bar_item("Examples")
 		}
 
@@ -91,10 +95,16 @@ run_button :: proc() {
 	}
 }
 
-open_menu: string
+UI_State :: struct {
+	grabbed_node:       Node_Handle,
+	node_grab_consumed: bool,
+	grab_offset:        k2.Vec2,
+	grabbed_pin:        Maybe(Pin_Handle),
+	open_menu:          string,
+}
 
 top_bar_item :: proc(label: string) {
-	active := open_menu == label
+	active := g.ui.open_menu == label
 
 	if clay.UI(clay.ID(label))(
 	{
@@ -108,7 +118,7 @@ top_bar_item :: proc(label: string) {
 		clay.Text(label, {fontSize = 14, textColor = COLOR_TEXT})
 
 		if clay_mouse_pressed() {
-			open_menu = active ? "" : label
+			g.ui.open_menu = active ? "" : label
 		}
 	}
 }
@@ -122,28 +132,26 @@ top_bar_dropdown :: proc() {
 		},
 		floating = {
 			attachTo = .ElementWithId,
-			parentId = clay.ID(open_menu).id,
+			parentId = clay.ID(g.ui.open_menu).id,
 			attachment = {parent = .LeftBottom},
 			zIndex = 100,
 		},
 		backgroundColor = COLOR_MANTLE,
 	},
 	) {
-		switch open_menu {
-		case "File":
-			dropdown_item("New")
-			dropdown_item("Open")
-			dropdown_item("Save")
-		case "Edit":
-			dropdown_item("Undo")
-			dropdown_item("Redo")
-		case "View":
-			dropdown_item("Zoom In")
-			dropdown_item("Zoom Out")
+		switch g.ui.open_menu {
+		// case "File":
+		// 	dropdown_item("New")
+		// 	dropdown_item("Open")
+		// 	dropdown_item("Save")
+		// case "Edit":
+		// 	dropdown_item("Undo")
+		// 	dropdown_item("Redo")
+		// case "View":
+		// 	dropdown_item("Zoom In")
+		// 	dropdown_item("Zoom Out")
 		case "Examples":
-			dropdown_item("Example 1")
-			dropdown_item("Example 2")
-			dropdown_item("Example 3")
+			dropdown_item("Add and Print")
 		}
 	}
 }
@@ -162,7 +170,7 @@ dropdown_item :: proc(label: string) {
 
 		if clay_mouse_pressed() {
 			fmt.printf("Clicked: %s\n", label)
-			open_menu = ""
+			g.ui.open_menu = ""
 		}
 	}
 }
@@ -178,8 +186,8 @@ node_element :: proc(node: ^Node, i: int) {
 	},
 	) {
 		if clay_mouse_pressed() {
-			g.mouse_grabbed_node = node.handle
-			g.mouse_grab_offset = clay.GetPointerState().position - node.position
+			g.ui.grabbed_node = node.handle
+			g.ui.grab_offset = clay.GetPointerState().position - node.position
 		}
 
 		if clay.UI(clay.ID("NodeHeader", u32(i)))(
@@ -205,6 +213,7 @@ node_element :: proc(node: ^Node, i: int) {
 			cornerRadius = {topLeft = 0, topRight = 0, bottomLeft = 16, bottomRight = 16},
 		},
 		) {
+
 			if clay.UI(clay.ID("NodePins", u32(i)))(
 			{
 				layout = {
@@ -271,33 +280,52 @@ pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
 		}
 
 		pin_index := is_input ? u8(i) : u8(len(NODE_DEFINITIONS[node.type].inputs)) + u8(i)
-		id := pin_id(Pin_Handle{node = node.handle, index = pin_index})
+		pin_handle := Pin_Handle {
+			node  = node.handle,
+			index = pin_index,
+		}
 
 		if is_input {
-			circle_element(color, id)
+			pin_circle(color, pin_handle)
 			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
 		} else {
 			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
-			circle_element(color, id)
+			pin_circle(color, pin_handle)
 		}
 	}
 }
 
-circle_element :: proc(color: clay.Color, id: clay.ElementId, radius: f32 = 5) {
+pin_circle :: proc(color: clay.Color, pin_handle: Pin_Handle, radius: f32 = 5) {
 	custom_element := new(Clay_Custom_Element, context.temp_allocator)
 	custom_element^ = Clay_Custom_Element_Circle {
 		radius = radius,
 		color  = color,
 	}
 
-	if clay.UI(id)(
+	if clay.UI(pin_id(pin_handle))(
 	{
 		layout = {
 			sizing = {width = clay.SizingFixed(radius * 2), height = clay.SizingFixed(radius * 2)},
 		},
 		custom = {customData = custom_element},
 	},
-	) {}
+	) {
+		if clay_mouse_pressed() {
+			g.ui.grabbed_pin = pin_handle
+			g.ui.node_grab_consumed = true
+			fmt.printf(
+				"Grabbed pin: %s\n",
+				NODE_DEFINITIONS[hm.get(&g.graph.nodes, pin_handle.node).type].name,
+			)
+		} else if clay_mouse_released() && g.ui.grabbed_pin != nil {
+			add_link(&g.graph, g.ui.grabbed_pin.?, pin_handle)
+			fmt.printf(
+				"Created link: %s -> %s\n",
+				NODE_DEFINITIONS[hm.get(&g.graph.nodes, g.ui.grabbed_pin.?.node).type].name,
+				NODE_DEFINITIONS[hm.get(&g.graph.nodes, pin_handle.node).type].name,
+			)
+		}
+	}
 }
 
 link_element :: proc(link: Link, i: int) {
@@ -320,17 +348,28 @@ pin_position :: proc(h: Pin_Handle) -> (pos: k2.Vec2, ok: bool) {
 }
 
 draw_link :: proc(link: Link) {
-	from_pos, ok_from := pin_position(link.from)
 	to_pos, ok_to := pin_position(link.to)
-	if !ok_from || !ok_to do return
+	if !ok_to do return
 
-	from_node := hm.get(&g.graph.nodes, link.from.node)
-	from_def := NODE_DEFINITIONS[from_node.type]
-	from_pin := from_def.outputs[int(link.from.index) - len(from_def.inputs)]
+	draw_link_draft(link.from, to_pos)
+}
+
+draw_link_draft :: proc(handle: Pin_Handle, b: k2.Vec2) {
+	pin_pos, pin_ok := pin_position(handle)
+	if !pin_ok do return
+
+	node := hm.get(&g.graph.nodes, handle.node)
+	node_def := NODE_DEFINITIONS[node.type]
+	pin: Pin_Definition
+	if handle.index < u8(len(node_def.inputs)) {
+		pin = node_def.inputs[int(handle.index)]
+	} else {
+		pin = node_def.outputs[int(handle.index) - len(node_def.inputs)]
+	}
 
 	color :=
-		from_pin.type == .Execution ? clay_color_to_k2_color(COLOR_YELLOW) : clay_color_to_k2_color(COLOR_TEAL)
-	k2.draw_line(from_pos, to_pos, 3, color)
+		pin.type == .Execution ? clay_color_to_k2_color(COLOR_YELLOW) : clay_color_to_k2_color(COLOR_TEAL)
+	k2.draw_line(pin_pos, b, 3, color)
 }
 
 output_box :: proc() {
@@ -361,11 +400,7 @@ output_box :: proc() {
 		) {
 			clay.Text("Output", {fontSize = 18, textColor = COLOR_TEXT})
 			clay.Text(
-				fmt.tprintf(
-					"Executed at %v in %v",
-					g.last_execution_date,
-					g.last_execution_time
-				),
+				fmt.tprintf("Executed at %v in %v", g.last_execution_date, g.last_execution_time),
 				{fontSize = 14, textColor = COLOR_TEXT},
 			)
 		}
@@ -411,11 +446,11 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	},
 	) {
 		top_bar()
-		if open_menu != "" {
+		if g.ui.open_menu != "" {
 			if clay.GetPointerState().state == .PressedThisFrame &&
 			   !clay.PointerOver(clay.ID("TopBarItems")) &&
 			   !clay.PointerOver(clay.ID("TopBarDropdown")) {
-				open_menu = ""
+				g.ui.open_menu = ""
 			} else {
 				top_bar_dropdown()
 			}

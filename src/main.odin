@@ -8,13 +8,12 @@ import "core:time"
 AppState :: struct {
 	k2_state:              ^k2.State,
 	graph:                 Graph,
-	mouse_grabbed_node:    Node_Handle,
-	mouse_grab_offset:     k2.Vec2,
 	output:                string,
 	last_execution_date:   time.Time,
 	last_execution_time:   time.Duration,
 	last_frame_times:      [60]f32,
 	last_frame_time_index: int,
+	ui:                    UI_State,
 }
 g: AppState
 
@@ -63,19 +62,30 @@ step :: proc() -> bool {
 	clay_update_state()
 
 	if k2.mouse_button_went_up(.Left) {
-		g.mouse_grabbed_node = {}
+		g.ui.grabbed_node = {}
+		g.ui.node_grab_consumed = false
+	} else if g.ui.grabbed_node != {} &&
+	   !g.ui.node_grab_consumed &&
+	   k2.mouse_button_is_held(.Left) {
+		node := hm.get(&g.graph.nodes, g.ui.grabbed_node)
+		node.position = k2.get_mouse_position() - g.ui.grab_offset
 	}
 
-	if g.mouse_grabbed_node != {} && k2.mouse_button_is_held(.Left) {
-		node := hm.get(&g.graph.nodes, g.mouse_grabbed_node)
-		node.position = k2.get_mouse_position() - g.mouse_grab_offset
+	ui_cmds := do_ui()
+
+	// This has to run after UI logic,
+	// so we don't forget the grabbed pin when the mouse is released over a pin
+	if k2.mouse_button_went_up(.Left) {
+		g.ui.grabbed_pin = nil
 	}
 
 	// Draw
 	k2.clear(k2.BLACK)
-
-	ui_cmds := do_ui()
 	clay_render(&ui_cmds)
+
+	if g.ui.grabbed_pin != nil {
+		draw_link_draft(g.ui.grabbed_pin.?, k2.get_mouse_position())
+	}
 
 	k2.present()
 

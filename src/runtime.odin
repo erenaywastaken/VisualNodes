@@ -15,15 +15,15 @@ find_incoming_link :: proc(graph: ^Graph, pin_handle: Pin_Handle) -> (Link, bool
 }
 
 evaluate_data_node :: proc(
-	graph: ^Graph,
+	ctx: ^Execution_Context,
 	node_handle: Node_Handle,
 	output_index: int,
 ) -> Pin_Data {
-	node := hm.get(&graph.nodes, node_handle)
+	node := hm.get(&ctx.graph.nodes, node_handle)
 	switch node.type {
 	case .Add:
-		a_val := evaluate_pin_value(graph, node_handle, 0)
-		b_val := evaluate_pin_value(graph, node_handle, 1)
+		a_val := evaluate_pin_value(ctx, node_handle, 0)
+		b_val := evaluate_pin_value(ctx, node_handle, 1)
 
 		a, a_ok := a_val.(int)
 		b, b_ok := b_val.(int)
@@ -31,38 +31,46 @@ evaluate_data_node :: proc(
 			return a + b
 		}
 	case .Begin, .Print:
-		panic("Tried to evaluate action node!")
+		fmt.printf(
+			"Error: Attempted to evaluate a non-data node type (Hint: Have you connected Program Flow to a data pin?): %s\n",
+			NODE_DEFINITIONS[node.type].name,
+		)
 	}
 	return nil
 }
 
-evaluate_pin_value :: proc(graph: ^Graph, node_handle: Node_Handle, pin_index: int) -> Pin_Data {
-	node := hm.get(&graph.nodes, node_handle)
+evaluate_pin_value :: proc(
+	ctx: ^Execution_Context,
+	node_handle: Node_Handle,
+	pin_index: int,
+) -> Pin_Data {
+	node := hm.get(&ctx.graph.nodes, node_handle)
 	pin_handle := Pin_Handle {
 		node  = node_handle,
 		index = u8(pin_index),
 	}
 
-	if link, found := find_incoming_link(graph, pin_handle); found {
-		from_def := NODE_DEFINITIONS[hm.get(&graph.nodes, link.from.node).type]
+	if link, found := find_incoming_link(ctx.graph, pin_handle); found {
+		from_def := NODE_DEFINITIONS[hm.get(&ctx.graph.nodes, link.from.node).type]
 		from_output_index := int(link.from.index) - len(from_def.inputs)
-		return evaluate_data_node(graph, link.from.node, from_output_index)
+		return evaluate_data_node(ctx, link.from.node, from_output_index)
 	}
 
 	return node.inputs[pin_index].data
 }
 
-execute_from_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^strings.Builder) {
-	node := hm.get(&graph.nodes, node_handle)
+
+execute_from_node :: proc(ctx: ^Execution_Context, node_handle: Node_Handle) {
+	node := hm.get(&ctx.graph.nodes, node_handle)
 	definition := NODE_DEFINITIONS[node.type]
 
 	switch node.type {
 	case .Print:
-		val := evaluate_pin_value(graph, node_handle, 1)
+		val := evaluate_pin_value(ctx, node_handle, 1)
 		if num, ok := val.(int); ok {
-			fmt.sbprintf(builder, "%d\n", num)
+			fmt.sbprintf(&ctx.output, "%d\n", num)
 		} else {
-			fmt.sbprintf(builder, "<nil>\n")
+			fmt.sbprintf(&ctx.output, "<nil>\n")
 		}
 
 	case .Begin, .Add:
@@ -76,30 +84,36 @@ execute_from_node :: proc(graph: ^Graph, node_handle: Node_Handle, builder: ^str
 				index = u8(out_pin_index),
 			}
 
-			for it := hm.iterator_make(&graph.links); link, _ in hm.iterate(&it) {
+			for it := hm.iterator_make(&ctx.graph.links); link, _ in hm.iterate(&it) {
 				if link.from == out_pin_handle {
-					execute_from_node(graph, link.to.node, builder)
+					execute_from_node(ctx, link.to.node)
 				}
 			}
 		}
 	}
 }
 
+Execution_Context :: struct {
+	graph:  ^Graph,
+	output: strings.Builder,
+}
+
 run_graph :: proc(graph: ^Graph) {
 	start := time.now()
 
-	builder: strings.Builder
-	strings.builder_init(&builder)
+	ctx: Execution_Context
+	ctx.graph = graph
+	strings.builder_init(&ctx.output)
 
 	for it := hm.iterator_make(&graph.nodes); node, handle in hm.iterate(&it) {
 		if node.type == .Begin {
-			execute_from_node(graph, handle, &builder)
+			execute_from_node(&ctx, handle)
 			break
 		}
 	}
 
-	g.output = strings.to_string(builder)
-	
+	g.output = strings.to_string(ctx.output)
+
 	now := time.now()
 	g.last_execution_time = time.diff(start, now)
 	g.last_execution_date = now

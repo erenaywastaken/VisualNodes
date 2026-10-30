@@ -12,8 +12,8 @@ create_test_graph :: proc(graph: ^Graph) {
 	add_node.inputs[0].data = 1
 	add_node.inputs[1].data = 2
 
-	add_link(graph, {begin, 0}, {print, 0})
-	add_link(graph, {add, 2}, {print, 1})
+	// add_link(graph, {begin, 0}, {print, 0})
+	// add_link(graph, {add, 2}, {print, 1})
 }
 
 print_graph :: proc(graph: ^Graph) {
