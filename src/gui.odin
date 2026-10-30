@@ -135,24 +135,136 @@ dropdown_item :: proc(label: string) {
 node_element :: proc(node: ^Node, i: int) {
 	if clay.UI(clay.ID("Node", u32(i)))(
 	{
-		layout = {sizing = {width = clay.SizingFixed(200), height = clay.SizingFixed(100)}},
+		layout = {
+			layoutDirection = .TopToBottom,
+			sizing = {width = clay.SizingFixed(200), height = clay.SizingFit({min = 75})},
+		},
 		floating = {offset = node.position, attachTo = .Parent},
-		cornerRadius = clay.CornerRadiusAll(16),
-		backgroundColor = COLOR_SURFACE,
 	},
 	) {
 		if clay_mouse_pressed() {
 			g.mouse_grabbed_node = node.handle
 			g.mouse_grab_offset = clay.GetPointerState().position - node.position
 		}
+
+		if clay.UI(clay.ID("NodeHeader", u32(i)))(
+		{
+			layout = {
+				sizing = {width = clay.SizingGrow({}), height = clay.SizingFixed(30)},
+				padding = clay.PaddingAll(8),
+			},
+			backgroundColor = NODE_DEFINITIONS[node.type].color,
+			cornerRadius = {topLeft = 16, topRight = 16, bottomLeft = 0, bottomRight = 0},
+		},
+		) {
+			clay.Text(NODE_DEFINITIONS[node.type].name, {fontSize = 18, textColor = 255})
+		}
+
+		if clay.UI(clay.ID("NodeBody", u32(i)))(
+		{
+			layout = {
+				sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})},
+				padding = {bottom = 10, left = 4, right = 4},
+			},
+			backgroundColor = COLOR_SURFACE,
+			cornerRadius = {topLeft = 0, topRight = 0, bottomLeft = 16, bottomRight = 16},
+		},
+		) {
+			if clay.UI(clay.ID("NodePins", u32(i)))(
+			{
+				layout = {
+					layoutDirection = .LeftToRight,
+					sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})},
+				},
+			},
+			) {
+				if clay.UI(clay.ID("InputPins", u32(i)))(
+				{
+					layout = {
+						layoutDirection = .TopToBottom,
+						sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})},
+					},
+				},
+				) {
+					for pin, j in NODE_DEFINITIONS[node.type].inputs {
+						pin_element(node, pin, u32(j), true)
+					}
+				}
+
+				if clay.UI(clay.ID("OutputPins", u32(i)))(
+				{
+					layout = {
+						layoutDirection = .TopToBottom,
+						sizing = {width = clay.SizingGrow({}), height = clay.SizingGrow({})},
+					},
+				},
+				) {
+					for pin, j in NODE_DEFINITIONS[node.type].outputs {
+						pin_element(node, pin, u32(j), false)
+					}
+				}
+			}
+		}
 	}
 }
 
-link_element :: proc(link: ^Link, i: int) {
-	// Handled in clay_backend.odin
-	clay.UI(clay.ID("Link", u32(i)))(
-	{floating = {attachTo = .Parent}, custom = {customData = link}},
-	)
+pin_element :: proc(node: ^Node, pin: Pin_Definition, i: u32, is_input: bool) {
+	if clay.UI(clay.ID_LOCAL("Pin", i))(
+	{
+		layout = {
+			layoutDirection = .LeftToRight,
+			sizing = {width = clay.SizingGrow({}), height = clay.SizingFixed(20)},
+			childGap = 2,
+			childAlignment = {y = .Center, x = is_input ? .Left : .Right},
+		},
+	},
+	) {
+		color := pin.type == .Execution ? COLOR_YELLOW : (is_input ? COLOR_BLUE : COLOR_GREEN)
+
+
+		pin_text: string
+		if is_input {
+			pin_text =
+				node.inputs[i].data != nil ? fmt.tprintf("%s: %v", pin.name, node.inputs[i].data) : pin.name
+		} else {
+			pin_text = pin.name
+		}
+
+		if is_input {
+			circle_element(color, i)
+			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
+		} else {
+			clay.Text(pin_text, {fontSize = 14, textColor = COLOR_TEXT})
+			circle_element(color, i)
+		}
+	}
+}
+
+circle_element :: proc(color: clay.Color, i: u32 = 0, radius: f32 = 5) {
+	custom_element := new(Clay_Custom_Element, context.temp_allocator)
+	custom_element^ = Clay_Custom_Element_Circle {
+		radius = 5,
+		color  = color,
+	}
+
+	if clay.UI(clay.ID_LOCAL("Circle", i))(
+	{
+		layout = {
+			sizing = {width = clay.SizingFixed(radius * 2), height = clay.SizingFixed(radius * 2)},
+		},
+		custom = {customData = custom_element},
+	},
+	) {}
+}
+
+link_element :: proc(link: Link, i: int) {
+	// Pointer has to be valid until it reaches the render stage
+	// This is the best way I could think of to do it
+	custom_element := new(Clay_Custom_Element, context.temp_allocator)
+	custom_element^ = link
+	if clay.UI(clay.ID("Link", u32(i)))(
+	{floating = {attachTo = .Parent}, custom = {customData = custom_element}},
+	) {}
 }
 
 do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
@@ -176,7 +288,7 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		}
 
 		for it, i := hm.iterator_make(&g.graph.links), 0; link, handle in hm.iterate(&it) {
-			link_element(link, i)
+			link_element(link^, i)
 			i += 1
 		}
 

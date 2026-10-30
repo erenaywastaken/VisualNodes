@@ -58,11 +58,29 @@ clay_update_state :: proc() {
 		vertical_scroll = 0
 		horizontal_scroll += k2.get_mouse_wheel_delta()
 	}
-	clay.UpdateScrollContainers(true, {vertical_scroll, horizontal_scroll}, k2.get_frame_time())
+	clay.UpdateScrollContainers(
+		true,
+		{horizontal_scroll, vertical_scroll} * 4,
+		k2.get_frame_time(),
+	)
+
+	if k2.key_went_down(.F12) {
+		clay.SetDebugModeEnabled(!clay.IsDebugModeEnabled())
+	}
 }
 
 clay_color_to_k2_color :: proc(color: clay.Color) -> k2.Color {
 	return {u8(color.r), u8(color.g), u8(color.b), u8(color.a)}
+}
+
+Clay_Custom_Element :: union {
+	Link,
+	Clay_Custom_Element_Circle,
+}
+
+Clay_Custom_Element_Circle :: struct {
+	radius: f32,
+	color:  clay.Color,
 }
 
 clay_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
@@ -103,11 +121,101 @@ clay_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
 			config := cmd.renderData.rectangle
 			color := clay_color_to_k2_color(config.backgroundColor)
 
-			if config.cornerRadius.topLeft > 0 {
-				radius: f32 = (config.cornerRadius.topLeft * 2) / min(bounds.width, bounds.height)
-				draw_rect_rounded({bounds.x, bounds.y, bounds.width, bounds.height}, radius, color)
-			} else {
+			cr := config.cornerRadius
+			rounded := cr.topLeft > 0 || cr.topRight > 0 || cr.bottomRight > 0 || cr.bottomLeft > 0
+
+			if !rounded {
 				k2.draw_rect({bounds.x, bounds.y, bounds.width, bounds.height}, color)
+			} else {
+				// These are the rectangles we draw, seperated:
+				//       XXXX
+				//    XX XXXX X
+				//       XXXX
+				tl_r := f32(cr.topLeft)
+				tr_r := f32(cr.topRight)
+				br_r := f32(cr.bottomRight)
+				bl_r := f32(cr.bottomLeft)
+
+				// Top
+				if bounds.width - tl_r - tr_r > 0 {
+					k2.draw_rect(
+						{bounds.x + tl_r, bounds.y, bounds.width - tl_r - tr_r, max(tl_r, tr_r)},
+						color,
+					)
+				}
+				// Bottom
+				if bounds.width - bl_r - br_r > 0 {
+					k2.draw_rect(
+						{
+							bounds.x + bl_r,
+							bounds.y + bounds.height - max(bl_r, br_r),
+							bounds.width - bl_r - br_r,
+							max(bl_r, br_r),
+						},
+						color,
+					)
+				}
+				// Left
+				if bounds.height - tl_r - bl_r > 0 {
+					k2.draw_rect(
+						{bounds.x, bounds.y + tl_r, max(tl_r, bl_r), bounds.height - tl_r - bl_r},
+						color,
+					)
+				}
+				// Right
+				if bounds.height - tr_r - br_r > 0 {
+					k2.draw_rect(
+						{
+							bounds.x + bounds.width - max(tr_r, br_r),
+							bounds.y + tr_r,
+							max(tr_r, br_r),
+							bounds.height - tr_r - br_r,
+						},
+						color,
+					)
+				}
+				// Center
+				cx := bounds.x + max(tl_r, bl_r)
+				cy := bounds.y + max(tl_r, tr_r)
+				cw := bounds.width - max(tl_r, bl_r) - max(tr_r, br_r)
+				ch := bounds.height - max(tl_r, tr_r) - max(bl_r, br_r)
+				if cw > 0 && ch > 0 {
+					k2.draw_rect({cx, cy, cw, ch}, color)
+				}
+
+				// Corners
+				if tl_r > 0 {
+					draw_rounded_corner(
+						{bounds.x, bounds.y, bounds.width, bounds.height},
+						.Top_Left,
+						tl_r,
+						color,
+					)
+				}
+				if tr_r > 0 {
+					draw_rounded_corner(
+						{bounds.x, bounds.y, bounds.width, bounds.height},
+						.Top_Right,
+						tr_r,
+						color,
+					)
+				}
+				if br_r > 0 {
+					draw_rounded_corner(
+						{bounds.x, bounds.y, bounds.width, bounds.height},
+						.Bottom_Right,
+						br_r,
+						color,
+					)
+				}
+				if bl_r > 0 {
+					draw_rounded_corner(
+						{bounds.x, bounds.y, bounds.width, bounds.height},
+						.Bottom_Left,
+						bl_r,
+						color,
+					)
+				}
 			}
 
 		case .Border:
@@ -184,8 +292,16 @@ clay_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
 		case .OverlayColorEnd:
 			pop(&overlay_colors)
 		case .Custom:
-			link := cast(^Link)cmd.renderData.custom.customData
-			draw_link(link^)
+			switch v in (cast(^Clay_Custom_Element)cmd.renderData.custom.customData)^ {
+			case Link:
+				draw_link(v)
+			case Clay_Custom_Element_Circle:
+				k2.draw_circle(
+					{bounds.x, bounds.y} + v.radius,
+					v.radius,
+					clay_color_to_k2_color(v.color),
+				)
+			}
 		case .None:
 		}
 	}
@@ -207,10 +323,9 @@ draw_rounded_corner :: proc(
 	c: k2.Color,
 	origin: k2.Vec2 = 0,
 	rot: f32 = 0,
-	segments: int = 3,
+	segments: int = 6,
 ) {
-	// (6 * segments) 6 is the number of verts in a segment.
-	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6 * segments)
+	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6 * segments / 2)
 
 	point: [12]k2.Vec2
 	centers := [4]k2.Vec2 {
@@ -288,175 +403,4 @@ draw_rounded_corner :: proc(
 
 		angle += (stepLength * 2)
 	}
-}
-
-// Draw rectangle with rounded edges
-// Segments represents how many triangles the corners will have multiplied by 2
-draw_rect_rounded :: proc(
-	rec: k2.Rect,
-	roundness: f32,
-	c: k2.Color,
-	origin: k2.Vec2 = 0,
-	rot: f32 = 0,
-	segments: int = 3,
-) {
-	roundness := roundness
-	segments := segments * 2
-
-	if roundness <= 0 { 	// if not a rounded rectangle will just draw a regular rect
-		k2.draw_rect(rec, c, origin, rot)
-		return
-	}
-
-	// (6*5) 6 is the number of verts in a quad. 5 is the number of quads
-	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6 * 5)
-
-	if roundness >= 1 { 	// clamps the roundness value to 1
-		roundness = 1
-	}
-
-	// Calculate corner radius
-	radius: f32
-	if rec.w > rec.h {
-		radius = (rec.h * roundness) / 2
-	} else {
-		radius = (rec.w * roundness) / 2
-	}
-
-	if radius <= 0 {
-		return
-	}
-
-	stepLength: f32 = 90 / cast(f32)segments
-
-	// Diagram points and part of the math was adapted from Raylib's "DrawRectangleRounded"
-	/*
-	Quick sketch to make sense of all of this,
-	there are 9 parts to draw, also mark the 12 points we'll use
-	      P0____________________P1
-	      /|                    |\
-	     /1|          2         |3\
-	 P7 /__|____________________|__\ P2
-	   |   |P8                P9|   |
-	   | 8 |          9         | 4 |
-	   | __|____________________|__ |
-	 P6 \  |P11              P10|  / P3
-	     \7|          6         |5/
-	      \|____________________|/
-	      P5                    P4
-	*/
-	// Coordinates of the 12 points that define the rounded rect
-	// These cords are in locale space {0,0}
-	point: [12]k2.Vec2
-	point = {
-		{radius, 0}, // P0
-		{(rec.w) - radius, 0}, // P1
-		{rec.w, radius}, // P2
-		{rec.w, (rec.h) - radius}, // P3
-		{(rec.w) - radius, rec.h}, // P4
-		{radius, rec.h}, // P5
-		{0, (rec.h) - radius}, // P6
-		{0, radius}, // P7
-		{radius, radius}, // P8
-		{(rec.w) - radius, radius}, // P9
-		{(rec.w) - radius, (rec.h) - radius}, // P10
-		{radius, (rec.h) - radius}, // P11
-	}
-
-	centers: [4]k2.Vec2 = {point[8], point[9], point[10], point[11]} // The center of the 4 rounded corners
-	angles: [4]f32 = {180, 270, 0, 90}
-	tl, tr, bl, br: k2.Vec2
-
-	// Shifts all of the points "Pos and Origin"
-	// If rot != 0 then it will rotate them as well
-	if rot == 0 {
-		xy: k2.Vec2 = {rec.x, rec.y}
-		for &p in point { 	// this shifts all of the points to the correct pos
-			p += xy
-			p += -origin
-		}
-	} else {
-		sin_rot := math.sin(rot)
-		cos_rot := math.cos(rot)
-		x := rec.x
-		y := rec.y
-		dx := -origin.x
-		dy := -origin.y
-		// this shifts all of the points to the correct pos and rotates it
-		for &p in point {
-			p = {
-				x + (dx + p.x) * cos_rot - (dy + p.y) * sin_rot,
-				y + (dx + p.x) * sin_rot + (dy + p.y) * cos_rot,
-			}
-		}
-	}
-
-	// Draw all the 4 corners:
-	// [1] Upper Left Corner,
-	// [3] Upper Right Corner,
-	// [5] Lower Right Corner,
-	// [7] Lower Left Corner
-	for corner in Corner {
-		draw_rounded_corner(rec, corner, radius, c, origin, rot, segments)
-	}
-
-	// [2] Upper Rectangle
-	tl = point[0]
-	tr = point[8]
-	bl = point[1]
-	br = point[9]
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(tr, {1, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(bl, {0, 1}, c)
-
-	// [4] Right Rectangle
-	tl = point[2]
-	tr = point[9]
-	bl = point[3]
-	br = point[10]
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(tr, {1, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(bl, {0, 1}, c)
-
-	// [6] Bottom Rectangle
-	tl = point[11]
-	tr = point[5]
-	bl = point[10]
-	br = point[4]
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(tr, {1, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(bl, {0, 1}, c)
-
-	// [8] Left Rectangle
-	tl = point[7]
-	tr = point[6]
-	bl = point[8]
-	br = point[11]
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(tr, {1, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(bl, {0, 1}, c)
-
-	// [9] Middle Rectangle
-	tl = point[8]
-	tr = point[11]
-	bl = point[9]
-	br = point[10]
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(tr, {1, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(tl, {0, 0}, c)
-	k2.batch_vertex(br, {1, 1}, c)
-	k2.batch_vertex(bl, {0, 1}, c)
 }
