@@ -183,8 +183,10 @@ clay_render :: proc(cmds: ^clay.ClayArray(clay.RenderCommand)) {
 			append(&overlay_colors, config.color)
 		case .OverlayColorEnd:
 			pop(&overlay_colors)
-		case .None:
 		case .Custom:
+			link := cast(^Link)cmd.renderData.custom.customData
+			draw_link(link^)
+		case .None:
 		}
 	}
 }
@@ -207,6 +209,9 @@ draw_rounded_corner :: proc(
 	rot: f32 = 0,
 	segments: int = 3,
 ) {
+	// (6 * segments) 6 is the number of verts in a segment.
+	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6 * segments)
+
 	point: [12]k2.Vec2
 	centers := [4]k2.Vec2 {
 		{radius, radius}, // P8
@@ -302,11 +307,9 @@ draw_rect_rounded :: proc(
 		k2.draw_rect(rec, c, origin, rot)
 		return
 	}
-	// (6 * segments * 4) 6 is the number of verts in a segment. 4 is the number of corners
-	// (6*5) 6 is the number of verts in a quad. 5 is the number of quads
-	vert_count := (6 * segments * 4) + (6 * 5)
-	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6)
 
+	// (6*5) 6 is the number of verts in a quad. 5 is the number of quads
+	k2._prepare_draw(g.k2_state.shape_drawing_texture, 6 * 5)
 
 	if roundness >= 1 { 	// clamps the roundness value to 1
 		roundness = 1

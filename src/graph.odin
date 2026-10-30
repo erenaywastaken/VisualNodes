@@ -4,7 +4,7 @@ import hm "core:container/handle_map"
 
 MAX_PINS_PER_NODE :: 5
 
-Base_Node :: struct {
+Node :: struct {
 	handle:   Node_Handle,
 	type:     Node_Type,
 	position: [2]f32,
@@ -38,12 +38,12 @@ Pin_Handle :: struct {
 }
 
 Graph :: struct {
-	nodes: hm.Dynamic_Handle_Map(Base_Node, Node_Handle),
+	nodes: hm.Dynamic_Handle_Map(Node, Node_Handle),
 	links: hm.Dynamic_Handle_Map(Link, Link_Handle),
 }
 
 add_node :: proc(graph: ^Graph, node_type: Node_Type, position: [2]f32) -> Node_Handle {
-	return hm.add(&graph.nodes, Base_Node{type = node_type, position = position})
+	return hm.add(&graph.nodes, Node{type = node_type, position = position})
 }
 
 add_link :: proc(graph: ^Graph, from, to: Pin_Handle) -> Link_Handle {

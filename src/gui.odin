@@ -2,6 +2,7 @@ package nodes
 
 import "../clay"
 import k2 "../karl2d"
+import hm "core:container/handle_map"
 import "core:fmt"
 
 // Catppuccin Latte
@@ -131,6 +132,29 @@ dropdown_item :: proc(label: string) {
 	}
 }
 
+node_element :: proc(node: ^Node, i: int) {
+	if clay.UI(clay.ID("Node", u32(i)))(
+	{
+		layout = {sizing = {width = clay.SizingFixed(200), height = clay.SizingFixed(100)}},
+		floating = {offset = node.position, attachTo = .Parent},
+		cornerRadius = clay.CornerRadiusAll(16),
+		backgroundColor = COLOR_SURFACE,
+	},
+	) {
+		if clay_mouse_pressed() {
+			g.mouse_grabbed_node = node.handle
+			g.mouse_grab_offset = clay.GetPointerState().position - node.position
+		}
+	}
+}
+
+link_element :: proc(link: ^Link, i: int) {
+	// Handled in clay_backend.odin
+	clay.UI(clay.ID("Link", u32(i)))(
+	{floating = {attachTo = .Parent}, custom = {customData = link}},
+	)
+}
+
 do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 
@@ -149,6 +173,16 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			} else {
 				top_bar_dropdown()
 			}
+		}
+
+		for it, i := hm.iterator_make(&g.graph.links), 0; link, handle in hm.iterate(&it) {
+			link_element(link, i)
+			i += 1
+		}
+
+		for it, i := hm.iterator_make(&g.graph.nodes), 0; node, handle in hm.iterate(&it) {
+			node_element(node, i)
+			i += 1
 		}
 	}
 
