@@ -203,7 +203,7 @@ node_element :: proc(node: ^Node, i: int) {
 			if k2.mouse_button_went_down(.Left) {
 				g.ui.grabbed_node = node.handle
 				g.ui.grab_offset = clay.GetPointerState().position - node.position
-			} else if k2.mouse_button_went_down(.Right) {
+			} else if !k2.key_is_held(.Left_Alt) && k2.mouse_button_went_down(.Right) {
 				g.ui.dropdown_node = node.handle
 				g.ui.dropdown_position = clay.GetPointerState().position
 			}
@@ -602,7 +602,7 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				i += 1
 			}
 
-			if k2.mouse_button_went_down(.Right) && clay.Hovered() {
+			if !k2.key_is_held(.Left_Alt) && k2.mouse_button_went_down(.Right) && clay.Hovered() {
 				g.ui.dropdown_position = k2.get_mouse_position()
 			}
 

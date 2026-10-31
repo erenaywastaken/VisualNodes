@@ -18,6 +18,7 @@ AppState :: struct {
 	last_frame_times:      [60]f32,
 	last_frame_time_index: int,
 	ui:                    UI_State,
+	mouse_last_frame:      k2.Vec2,
 }
 g: AppState
 
@@ -56,6 +57,8 @@ step :: proc() -> bool {
 	defer free_all(context.temp_allocator)
 
 	// Update
+	defer g.mouse_last_frame = k2.get_mouse_position()
+
 	g.last_frame_times[g.last_frame_time_index] = k2.get_frame_time()
 	g.last_frame_time_index = (g.last_frame_time_index + 1) % len(g.last_frame_times)
 
@@ -98,6 +101,21 @@ step :: proc() -> bool {
 	if k2.mouse_button_went_up(.Left) {
 		g.ui.grabbed_pin = nil
 	}
+
+	if k2.key_is_held(.Left_Alt) && k2.mouse_button_is_held(.Right) {
+		// Link cutter tool
+		g.cursor = .Crosshair
+		mouse_current := k2.get_mouse_position()
+		for it := hm.iterator_make(&g.graph.links); link, _ in hm.iterate(&it) {
+			from, _ := pin_position(link.from)
+			to, _ := pin_position(link.to)
+
+			if segment_segment_intersects(from, to, g.mouse_last_frame, mouse_current) {
+				hm.remove(&g.graph.links, link.handle)
+			}
+		}
+	}
+
 
 	// set_cursor() directly calls the OS API,
 	// so I thought it would be better to cache the states
