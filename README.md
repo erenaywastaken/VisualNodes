@@ -39,3 +39,6 @@ The biggest middle part of the whole UI. This is where nodes and links live in.
 2. Clone or download this repository (`git clone https://github.com/erenaywastaken/VisualNodes.git`)
 3. Navigate to the repo root (`cd VisualNodes/`)
 4. Build & run (`odin run src/`)
+
+# Reflection
+I had always wanted to do a project like this as it seemed very interesting as an idea. My first try was with Typescript but i hit some roadblocks on that and stopped working on the project. This is my second try on the idea using a systems programming language this time. And I am happy that I was able to finish it. I had a lot of fun writing it and exercised a lot of my data structures & algorithms knowledge.
