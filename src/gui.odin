@@ -166,6 +166,9 @@ top_bar_dropdown :: proc() {
 			} else if dropdown_item("Multiply and Add") {
 				load_example2()
 				pressed = true
+			} else if dropdown_item("Compare and Branch") {
+				load_example3()
+				pressed = true
 			}
 		}
 

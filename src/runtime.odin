@@ -64,7 +64,7 @@ evaluate_data_node :: proc(
 				return a >= b
 			}
 		}
-	case .Begin, .Print:
+	case .Begin, .Branch, .Print:
 		fmt.printf(
 			"Error: Attempted to evaluate a non-data node type (Hint: Have you connected Program Flow to a data pin?): %s\n",
 			NODE_DEFINITIONS[node.type].name,
@@ -93,6 +93,15 @@ evaluate_pin_value :: proc(
 	return node.inputs[pin_index].data
 }
 
+follow_and_run_execution :: proc(ctx: ^Execution_Context, out_handle: Pin_Handle) {
+	node := hm.get(&ctx.graph.nodes, out_handle.node)
+
+	for it := hm.iterator_make(&ctx.graph.links); link, _ in hm.iterate(&it) {
+		if link.from == out_handle {
+			execute_from_node(ctx, link.to.node)
+		}
+	}
+}
 
 execute_from_node :: proc(ctx: ^Execution_Context, node_handle: Node_Handle) {
 	node := hm.get(&ctx.graph.nodes, node_handle)
@@ -106,24 +115,18 @@ execute_from_node :: proc(ctx: ^Execution_Context, node_handle: Node_Handle) {
 		} else {
 			fmt.sbprintf(&ctx.output, "<nil>\n")
 		}
+		follow_and_run_execution(ctx, Pin_Handle{node = node_handle, index = 2})
 
-	case .Begin, .Arithmetic, .Compare:
-	}
-
-	for pin, i in definition.outputs {
-		if pin.type == .Execution {
-			out_pin_index := len(definition.inputs) + i
-			out_pin_handle := Pin_Handle {
-				node  = node_handle,
-				index = u8(out_pin_index),
-			}
-
-			for it := hm.iterator_make(&ctx.graph.links); link, _ in hm.iterate(&it) {
-				if link.from == out_pin_handle {
-					execute_from_node(ctx, link.to.node)
-				}
-			}
+	case .Branch:
+		condition := evaluate_pin_value(ctx, node_handle, 1)
+		if cond, ok := condition.(bool); ok && cond {
+			follow_and_run_execution(ctx, Pin_Handle{node = node_handle, index = 2})
+		} else {
+			follow_and_run_execution(ctx, Pin_Handle{node = node_handle, index = 3})
 		}
+	case .Begin:
+		follow_and_run_execution(ctx, Pin_Handle{node = node_handle, index = 0})
+	case .Arithmetic, .Compare:
 	}
 }
 

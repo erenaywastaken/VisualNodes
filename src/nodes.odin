@@ -29,6 +29,7 @@ Node_Type :: enum {
 	Begin,
 	Arithmetic,
 	Compare,
+	Branch,
 	Print,
 }
 
@@ -58,6 +59,12 @@ NODE_DEFINITIONS := [Node_Type]Node_Definition {
 			{"Op", .Enum, {"==", "!=", "<", ">", "<=", ">="}},
 		},
 		outputs = {{"Out", .Number, {}}},
+	},
+	.Branch = {
+		name = "Branch",
+		color = COLOR_BLUE,
+		inputs = {{"Prg In", .Execution, {}}, {"Condition", .Boolean, {}}},
+		outputs = {{"True", .Execution, {}}, {"False", .Execution, {}}},
 	},
 	.Print = {
 		name = "Print",

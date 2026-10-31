@@ -44,3 +44,29 @@ load_example2 :: proc() {
 	add_link(&g.graph, {add1, 3}, {print, 1})
 	add_link(&g.graph, {add2, 3}, {add1, 1})
 }
+
+load_example3 :: proc() {
+	clear_graph(&g.graph)
+
+	begin := add_node(&g.graph, .Begin, {80, 115})
+	compare := add_node(&g.graph, .Compare, {250, 300})
+	branch := add_node(&g.graph, .Branch, {470, 200})
+	print_true := add_node(&g.graph, .Print, {700, 120})
+	print_false := add_node(&g.graph, .Print, {700, 280})
+
+	compare_node := hm.get(&g.graph.nodes, compare)
+	compare_node.inputs[0].data = 5
+	compare_node.inputs[1].data = 3
+	compare_node.inputs[2].data = ">"
+
+	print_true_node := hm.get(&g.graph.nodes, print_true)
+	print_true_node.inputs[1].data = 1
+
+	print_false_node := hm.get(&g.graph.nodes, print_false)
+	print_false_node.inputs[1].data = 0
+
+	add_link(&g.graph, {begin, 0}, {branch, 0})
+	add_link(&g.graph, {compare, 3}, {branch, 1})
+	add_link(&g.graph, {branch, 2}, {print_true, 0})
+	add_link(&g.graph, {branch, 3}, {print_false, 0})
+}
