@@ -10,17 +10,25 @@ Node_Definition :: struct {
 Pin_Definition :: struct {
 	name: string,
 	type: Pin_Type,
+	data: Pin_Type_Data,
 }
 
 Pin_Type :: enum {
 	Execution,
-	Integer,
+	Number,
+	Boolean,
 	String,
+	Enum,
+}
+
+Pin_Type_Data :: union {
+	[]string,
 }
 
 Node_Type :: enum {
 	Begin,
-	Add,
+	Arithmetic,
+	Compare,
 	Print,
 }
 
@@ -29,18 +37,32 @@ NODE_DEFINITIONS := [Node_Type]Node_Definition {
 		name = "Begin",
 		color = COLOR_TEAL,
 		inputs = {},
-		outputs = {{"Prg Out", .Execution}},
+		outputs = {{"Prg Out", .Execution, {}}},
 	},
-	.Add = {
-		name = "Add",
+	.Arithmetic = {
+		name = "Arithmetic",
 		color = COLOR_ROSEWATER,
-		inputs = {{"A", .Integer}, {"B", .Integer}},
-		outputs = {{"Out", .Integer}},
+		inputs = {
+			{"A", .Number, {}},
+			{"B", .Number, {}},
+			{"Op", .Enum, {"+", "-", "*", "/", "%"}},
+		},
+		outputs = {{"Out", .Number, {}}},
+	},
+	.Compare = {
+		name = "Compare",
+		color = COLOR_YELLOW,
+		inputs = {
+			{"A", .Number, {}},
+			{"B", .Number, {}},
+			{"Op", .Enum, {"==", "!=", "<", ">", "<=", ">="}},
+		},
+		outputs = {{"Out", .Number, {}}},
 	},
 	.Print = {
 		name = "Print",
 		color = COLOR_MAUVE,
-		inputs = {{"Prg In", .Execution}, {"Number", .Integer}},
-		outputs = {{"Prg Out", .Execution}},
+		inputs = {{"Prg In", .Execution, {}}, {"Value", .Number, {}}},
+		outputs = {{"Prg Out", .Execution, {}}},
 	},
 }

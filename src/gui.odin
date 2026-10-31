@@ -181,10 +181,6 @@ dropdown_item :: proc(label: string) -> bool {
 		clay.Text(label, {fontSize = 14, textColor = COLOR_TEXT})
 
 		pressed = clay_mouse_pressed()
-		if pressed {
-			fmt.println("Pressed dropdown item:", label)
-		}
-
 	}
 	return pressed
 }
@@ -194,7 +190,7 @@ node_element :: proc(node: ^Node, i: int) {
 	{
 		layout = {
 			layoutDirection = .TopToBottom,
-			sizing = {width = clay.SizingFixed(200), height = clay.SizingFit({min = 75})},
+			sizing = {width = clay.SizingFit({min = 200}), height = clay.SizingFit({min = 75})},
 		},
 		floating = {offset = node.position, attachTo = .Parent},
 	},
@@ -295,8 +291,6 @@ pin_text_box :: proc(handle: Pin_Handle, i: u32) {
 		backgroundColor = COLOR_WHITE,
 	},
 	) {
-
-
 		text: string
 		if g.ui.editing_pin == handle {
 			if clay.Hovered() {
@@ -315,6 +309,34 @@ pin_text_box :: proc(handle: Pin_Handle, i: u32) {
 				strings.to_string(g.ui.text_edit.builder),
 				{fontSize = 14, textColor = COLOR_BLACK},
 			)
+		}
+	}
+}
+
+enum_dropdown :: proc(handle: Pin_Handle, options: []string) {
+	if clay.UI(clay.ID("EnumDropdown"))(
+	{
+		layout = {
+			sizing = {width = clay.SizingFit({min = 50}), height = clay.SizingFixed(16)},
+			childAlignment = {y = .Center},
+			padding = {left = 2, right = 2},
+		},
+		border = {
+			width = clay.BorderAll(1),
+			color = g.ui.editing_pin == handle ? COLOR_BLUE : COLOR_OVERLAY,
+		},
+		backgroundColor = COLOR_WHITE,
+	},
+	) {
+		node := hm.get(&g.graph.nodes, handle.node)
+		current_value := node.inputs[handle.index].data
+
+		for option, j in options {
+			if dropdown_item(option) {
+				node.inputs[handle.index].data = option
+				g.ui.editing_pin = nil
+				break
+			}
 		}
 	}
 }
@@ -348,7 +370,11 @@ input_pin_value :: proc(node: ^Node, pin: Pin_Handle, def: Pin_Definition, i: u3
 		clay.Text(text, {fontSize = 14, textColor = COLOR_TEXT})
 
 		if g.ui.editing_pin == pin {
-			pin_text_box(pin, i)
+			if def.type == .Enum {
+				enum_dropdown(pin, def.data.([]string))
+			} else {
+				pin_text_box(pin, i)
+			}
 		}
 	}
 }

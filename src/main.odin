@@ -81,10 +81,14 @@ step :: proc() -> bool {
 			switch NODE_DEFINITIONS[node.type].inputs[g.ui.editing_pin.?.index].type {
 			case .String:
 				node.inputs[g.ui.editing_pin.?.index].data = text
-			case .Integer:
-				if num, ok := strconv.parse_int(text); ok {
+			case .Number:
+				if num, ok := strconv.parse_f64(text); ok {
 					node.inputs[g.ui.editing_pin.?.index].data = num
 				}
+			case .Boolean:
+				node.inputs[g.ui.editing_pin.?.index].data = text == "true" || text == "1"
+			case .Enum:
+				node.inputs[g.ui.editing_pin.?.index].data = text
 			case .Execution: // Will never happen
 			}
 		}

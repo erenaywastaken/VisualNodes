@@ -2,6 +2,7 @@ package nodes
 
 import hm "core:container/handle_map"
 import "core:fmt"
+import "core:math"
 import "core:strings"
 import "core:time"
 
@@ -21,14 +22,47 @@ evaluate_data_node :: proc(
 ) -> Pin_Data {
 	node := hm.get(&ctx.graph.nodes, node_handle)
 	switch node.type {
-	case .Add:
+	case .Arithmetic:
 		a_val := evaluate_pin_value(ctx, node_handle, 0)
 		b_val := evaluate_pin_value(ctx, node_handle, 1)
 
-		a, a_ok := a_val.(int)
-		b, b_ok := b_val.(int)
+		a, a_ok := a_val.(f64)
+		b, b_ok := b_val.(f64)
 		if a_ok && b_ok {
-			return a + b
+			switch node.inputs[2].data.(string) {
+			case "+":
+				return a + b
+			case "-":
+				return a - b
+			case "*":
+				return a * b
+			case "/":
+				return a / b
+			case "%":
+				return math.mod(a, b)
+			}
+		}
+	case .Compare:
+		a_val := evaluate_pin_value(ctx, node_handle, 0)
+		b_val := evaluate_pin_value(ctx, node_handle, 1)
+
+		a, a_ok := a_val.(f64)
+		b, b_ok := b_val.(f64)
+		if a_ok && b_ok {
+			switch node.inputs[2].data.(string) {
+			case "==":
+				return a == b
+			case "!=":
+				return a != b
+			case "<":
+				return a < b
+			case ">":
+				return a > b
+			case "<=":
+				return a <= b
+			case ">=":
+				return a >= b
+			}
 		}
 	case .Begin, .Print:
 		fmt.printf(
@@ -67,13 +101,13 @@ execute_from_node :: proc(ctx: ^Execution_Context, node_handle: Node_Handle) {
 	switch node.type {
 	case .Print:
 		val := evaluate_pin_value(ctx, node_handle, 1)
-		if num, ok := val.(int); ok {
-			fmt.sbprintf(&ctx.output, "%d\n", num)
+		if num, ok := val.(f64); ok {
+			fmt.sbprintf(&ctx.output, "%v\n", num)
 		} else {
 			fmt.sbprintf(&ctx.output, "<nil>\n")
 		}
 
-	case .Begin, .Add:
+	case .Begin, .Arithmetic, .Compare:
 	}
 
 	for pin, i in definition.outputs {

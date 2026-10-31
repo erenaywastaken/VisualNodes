@@ -5,12 +5,13 @@ import "core:fmt"
 
 create_test_graph :: proc(graph: ^Graph) {
 	begin := add_node(graph, .Begin, {100, 50})
-	add := add_node(graph, .Add, {200, 200})
+	add := add_node(graph, .Arithmetic, {200, 200})
 	print := add_node(graph, .Print, {500, 50})
 
 	add_node := hm.get(&graph.nodes, add)
 	add_node.inputs[0].data = 1
 	add_node.inputs[1].data = 2
+	add_node.inputs[2].data = "+"
 
 	// add_link(graph, {begin, 0}, {print, 0})
 	// add_link(graph, {add, 2}, {print, 1})

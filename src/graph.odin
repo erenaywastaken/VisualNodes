@@ -17,7 +17,8 @@ Pin :: struct {
 }
 
 Pin_Data :: union {
-	int,
+	f64,
+	bool,
 	string,
 }
 
