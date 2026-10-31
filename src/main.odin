@@ -36,9 +36,6 @@ init :: proc() {
 		{window_mode = .Windowed_Resizable, anti_alias = true},
 	)
 	setup_clay()
-
-	create_test_graph(&g.graph)
-	print_graph(&g.graph)
 }
 
 get_average_frame_time :: proc() -> f32 {

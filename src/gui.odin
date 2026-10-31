@@ -59,7 +59,7 @@ top_bar :: proc() {
 		},
 		) {
 			// top_bar_item("File")
-			// top_bar_item("Edit")
+			top_bar_item("Edit")
 			// top_bar_item("View")
 			top_bar_item("Examples")
 		}
@@ -151,14 +151,22 @@ top_bar_dropdown :: proc() {
 		// 	dropdown_item("New")
 		// 	dropdown_item("Open")
 		// 	dropdown_item("Save")
-		// case "Edit":
-		// 	dropdown_item("Undo")
-		// 	dropdown_item("Redo")
+		case "Edit":
+			if dropdown_item("Clear Graph") {
+				clear_graph(&g.graph)
+				pressed = true
+			}
 		// case "View":
 		// 	dropdown_item("Zoom In")
 		// 	dropdown_item("Zoom Out")
 		case "Examples":
-			pressed ||= dropdown_item("Add and Print")
+			if dropdown_item("Add and Print") {
+				load_example1()
+				pressed = true
+			} else if dropdown_item("Multiply and Add") {
+				load_example2()
+				pressed = true
+			}
 		}
 
 		if pressed {
