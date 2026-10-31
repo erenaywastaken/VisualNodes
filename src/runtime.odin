@@ -115,6 +115,7 @@ run_graph :: proc(graph: ^Graph) {
 	g.output = strings.to_string(ctx.output)
 
 	now := time.now()
+	g.executed = true
 	g.last_execution_time = time.diff(start, now)
 	g.last_execution_date = now
 }

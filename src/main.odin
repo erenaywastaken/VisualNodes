@@ -2,8 +2,8 @@ package nodes
 
 import k2 "../karl2d"
 import hm "core:container/handle_map"
-import "core:strings"
 import "core:strconv"
+import "core:strings"
 import "core:time"
 
 AppState :: struct {
@@ -14,6 +14,7 @@ AppState :: struct {
 	output:                string,
 	last_execution_date:   time.Time,
 	last_execution_time:   time.Duration,
+	executed:              bool,
 	last_frame_times:      [60]f32,
 	last_frame_time_index: int,
 	ui:                    UI_State,
@@ -37,10 +38,6 @@ init :: proc() {
 
 	create_test_graph(&g.graph)
 	print_graph(&g.graph)
-	run_graph(&g.graph)
-	// Try again to make sure there's no state bug
-	delete(g.output)
-	run_graph(&g.graph)
 }
 
 get_average_frame_time :: proc() -> f32 {
@@ -78,15 +75,17 @@ step :: proc() -> bool {
 		if g.ui.editing_pin != nil {
 			text := strings.to_string(g.ui.text_edit.builder)
 			node := hm.get(&g.graph.nodes, g.ui.editing_pin.?.node)
-			switch v in node.inputs[g.ui.editing_pin.?.index].data {
-			case string:
+			switch NODE_DEFINITIONS[node.type].inputs[g.ui.editing_pin.?.index].type {
+			case .String:
 				node.inputs[g.ui.editing_pin.?.index].data = text
-			case int:
+			case .Integer:
 				if num, ok := strconv.parse_int(text); ok {
 					node.inputs[g.ui.editing_pin.?.index].data = num
 				}
+			case .Execution: // Will never happen
 			}
 		}
+
 		g.ui.editing_pin = nil
 	}
 
