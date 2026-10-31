@@ -564,6 +564,44 @@ stats_box :: proc() {
 	}
 }
 
+HELP_TEXT :: """
+Visual Nodes - Beta
+
+Try loading and \"Run\"ning examples from the \"Examples\" menu in the top bar.
+Then have a look at the output box in the bottom left corner to see the results.
+
+You can try making your own graphs!
+
+Controls:
+- Left Click and Drag: Move nodes
+- Right Click on Canvas: Open context menu for adding nodes
+- Right Click on Node: Open context menu for deleting
+- Hold Left Alt + Right Click and Drag: Cut/Delete links between nodes
+- Left Click on Pin and Drag to another Pin: Create a link between nodes
+- Left Click on Input Pin Label: Edit the value of the input pin
+"""
+
+
+help_box :: proc() {
+	if clay.UI(clay.ID("HelpBox"))(
+	{
+		layout = {
+			layoutDirection = .TopToBottom,
+			sizing = {width = clay.SizingFit({}), height = clay.SizingFit({})},
+			padding = clay.PaddingAll(10),
+			childAlignment = {x = .Right, y = .Top},
+		},
+		floating = {
+			attachTo = .Parent,
+			attachment = {parent = .RightTop, element = .RightTop},
+			pointerCaptureMode = .Passthrough,
+		},
+	},
+	) {
+		clay.Text(HELP_TEXT, {fontSize = 14, textColor = COLOR_TEXT})
+	}
+}
+
 canvas_dropdown :: proc() {
 	if clay.UI(clay.ID("CanvasDropdown"))(
 	{
@@ -646,6 +684,8 @@ do_ui :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			if g.ui.dropdown_position != nil {
 				canvas_dropdown()
 			}
+
+			help_box()
 		}
 
 		output_box()
